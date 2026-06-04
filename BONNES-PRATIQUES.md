@@ -17,6 +17,8 @@ Règles non négociables pour contribuer à ce projet.
 - Les exceptions métier (`GuardrailViolation`, `LLMError`, etc.) sont levées dans `domain/infra` et rattrapées dans les routes API
 - Chaque nouvelle exception domaine s'ajoute dans `src/core/exceptions.py`
 - Ne jamais laisser une `Exception` générique traverser une route — toujours convertir en `HTTPException`
+- Mapping HTTP obligatoire : `EmbeddingError` → 502, `VectorStoreError` → 500, `LLMError` → 500, `GuardrailViolation` → 422, `UnsupportedSourceError` → 422
+- Le handler global (`@app.exception_handler(Exception)` dans `main.py`) attrape tout le reste et retourne un JSON structuré avec `request_id` — ne pas dupliquer cette logique dans les routes
 
 ## Typage
 
@@ -46,6 +48,8 @@ Règles non négociables pour contribuer à ce projet.
 - Toute sortie LLM passe par `filters.check_output()` avant d'être retournée
 - `X-API-Key` est obligatoire sur tous les endpoints data — jamais sur `/health` ni `/metrics`
 - Pas de secrets, d'IPs, ni de chemins absolus dans le code
+- Rate limiting via `@limiter.limit(settings.rate_limit_chat)` sur toute route coûteuse (LLM, ingest). Le paramètre `request: Request` doit être **en premier** dans la signature de la fonction pour que slowapi le détecte
+- `ALLOWED_ORIGINS` doit être restreint en production — ne jamais laisser `["*"]` face à Internet
 
 ## Workflow Git
 

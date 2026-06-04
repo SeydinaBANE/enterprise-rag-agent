@@ -37,6 +37,10 @@ Optional fields (all have defaults):
 | `CHUNK_OVERLAP` | `50` | Overlap between chunks |
 | `RETRIEVAL_TOP_K` | `5` | Chunks returned per query |
 | `POSTGRES_DSN` | _(unset)_ | If set, enables persistent sessions via Postgres; otherwise uses in-memory |
+| `ALLOWED_ORIGINS` | `["*"]` | JSON list of allowed CORS origins — set to `["https://monapp.com"]` in prod |
+| `RATE_LIMIT_CHAT` | `20/minute` | Rate limit on `/chat` per IP |
+| `RATE_LIMIT_INGEST` | `5/minute` | Rate limit on `/documents/ingest*` per IP |
+| `WORKERS` | `1` | Uvicorn worker count — set to `4` (or `2*CPU+1`) in prod |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | _(unset)_ | OpenTelemetry collector endpoint |
 
 ---

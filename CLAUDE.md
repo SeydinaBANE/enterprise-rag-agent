@@ -45,7 +45,7 @@ API (FastAPI) → Agent → Domain (core/) ← Infra (infra/)
 
 ### Domain layer (`src/core/`) — zero external dependencies
 
-- `config.py`: `Settings` (pydantic-settings). Instantiated as `settings` singleton at import time. All modules read from `settings`, never from `os.environ` directly.
+- `config.py`: `Settings` (pydantic-settings). Instantiated as `settings` singleton at import time. All modules read from `settings`, never from `os.environ` directly. New production fields: `allowed_origins` (list, default `["*"]`), `rate_limit_chat` (default `"20/minute"`), `rate_limit_ingest` (default `"5/minute"`), `workers` (default `1`).
 - `ports.py`: Four ABCs — `ILLMClient`, `IVectorStore`, `IDocumentLoader`, `ISessionStore`. The entire codebase depends on these, never on concrete implementations.
 - `models.py`: All Pydantic models. `AgentState` is a `TypedDict` (mutable dict passed through agent steps).
 - `exceptions.py`: `GuardrailViolation`, `LLMError`, `EmbeddingError`, `VectorStoreError`, `DocumentNotFoundError`, `UnsupportedSourceError` — raised in domain/infra, caught in API routes.
@@ -81,6 +81,12 @@ Prometheus metrics module-level singletons: `chat_requests_total` (Counter, labe
 
 Routes access services via `request.app.state.<service>`. Auth is a FastAPI `Depends` on all data endpoints — never on `/health` or `/metrics`. Guardrail `check_input()` is called before agent invocation; `check_output()` redacts PII from the LLM response before returning.
 
+**Lifespan** (`main.py`): on startup, checks ChromaDB and Postgres reachability before accepting traffic (fail-fast). On shutdown, closes the `PostgresSessionStore` connection pool cleanly.
+
+**Rate limiting** (`src/api/middleware/ratelimit.py`): module-level `slowapi.Limiter` singleton. Applied with `@limiter.limit(settings.rate_limit_chat)` on `/chat` (default 20/min) and `@limiter.limit(settings.rate_limit_ingest)` on ingest endpoints (default 5/min). The `request: Request` parameter must be the first argument of any rate-limited route function.
+
+**Global exception handler**: unhandled exceptions return `{"detail": "Internal server error", "request_id": "<uuid>"}` (JSON 500) instead of the default HTML Starlette error page. The `request_id` is set by `RequestLoggingMiddleware` on `request.state.request_id`.
+
 ## Testing patterns
 
 Unit tests mock at the interface boundary using `MockLLMClient`, `MockVectorStore`, and `MockSessionStore` from `tests/conftest.py` — these are plain classes with `AsyncMock` attributes (not ABC subclasses). Set `side_effect` on `mock_llm.complete` when a test calls it multiple times (e.g., route call then generate call). Default embed return is `[[0.1] * 384]`.
@@ -91,6 +97,6 @@ Integration tests require ChromaDB via `make docker-up`. Mark with `@pytest.mark
 
 - `src/core/` must remain free of external library imports.
 - All config values come from `settings` (never hardcode or read env vars directly).
-- Business exceptions (`GuardrailViolation`, `LLMError`, etc.) are raised in domain/infra, caught and converted to HTTP errors in API routes.
+- Business exceptions (`GuardrailViolation`, `LLMError`, `EmbeddingError`, `VectorStoreError`) are raised in domain/infra, caught in API routes: `EmbeddingError` → 502, `VectorStoreError` → 500, `LLMError` → 500, `GuardrailViolation` → 422.
 - Commit format: `<type>(<scope>): <description>` — enforced by commitlint pre-commit hook.
 - **ChromaDB collection dimension**: the `documents` collection is created on first ingest and its embedding dimension is fixed. If the embedding model changes or tests (mock 384-dim) run before production (1536-dim), delete the collection before re-ingesting: `curl -X DELETE http://localhost:8001/api/v2/tenants/default_tenant/databases/default_database/collections/documents`
