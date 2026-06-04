@@ -45,7 +45,7 @@ jobs:
         run: uv sync
 
       - name: Run unit tests
-        run: uv run pytest tests/unit/ -v --cov=src --cov-report=xml --cov-fail-under=80
+        run: uv run pytest tests/unit/ -v --cov-report=xml --cov-fail-under=80
         env:
           OPENROUTER_API_KEY: test-key
           API_KEY: test-api-key
