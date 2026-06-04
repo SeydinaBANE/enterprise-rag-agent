@@ -78,10 +78,12 @@ curl http://localhost:8000/health
 
 | Service | Port | Purpose |
 |---|---|---|
+| `frontend` | 3000 | Next.js UI |
 | `app` | 8000 | FastAPI application |
 | `chromadb` | 8001 | Vector store |
+| `postgres` | 5432 | Session storage |
 | `prometheus` | 9090 | Metrics scraping |
-| `grafana` | 3000 | Metrics dashboards |
+| `grafana` | 3001 | Metrics dashboards (admin / admin) |
 
 ```bash
 make docker-up    # start all

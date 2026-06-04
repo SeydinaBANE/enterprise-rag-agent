@@ -10,8 +10,13 @@ make install              # uv sync + pre-commit install
 
 # Development
 make run                  # FastAPI on localhost:8000 (hot reload) — stop app container first if running
-make docker-up            # ChromaDB + Postgres + Prometheus + Grafana (detached)
+make docker-up            # all services: ChromaDB:8001, Postgres:5432, Prometheus:9090, frontend:3000, Grafana:3001 (detached)
 make docker-down
+
+# Frontend (Next.js 16) — run from the frontend/ directory
+cd frontend && npm run dev    # dev server on localhost:3000
+cd frontend && npm run build  # production build
+cd frontend && npm run lint   # eslint
 
 # Quality (all must pass before committing)
 make lint                 # ruff check src/ tests/
@@ -33,6 +38,7 @@ docker compose up -d --build app     # rebuild + restart the Compose app contain
 ```
 
 Environment: copy `.env.example` → `.env`, set `OPENROUTER_API_KEY` and `API_KEY`.
+For the frontend, copy `frontend/.env.local.example` → `frontend/.env.local` (sets `NEXT_PUBLIC_API_URL`).
 Tests override env vars inline — no `.env` needed to run `make test`.
 
 ## Architecture
@@ -93,9 +99,29 @@ Routes access services via `request.app.state.<service>`. Auth is a FastAPI `Dep
 
 **Global exception handler**: unhandled exceptions return `{"detail": "Internal server error", "request_id": "<uuid>"}` (JSON 500) instead of the default HTML Starlette error page. The `request_id` is set by `RequestLoggingMiddleware` on `request.state.request_id`.
 
+**API endpoints**:
+| Method | Path | Auth | Notes |
+|--------|------|------|-------|
+| POST | `/chat` | API key | rate-limited 20/min |
+| POST | `/documents/ingest` | API key | multipart file upload, rate-limited 5/min |
+| POST | `/documents/ingest/url` | API key | JSON `{url}`, rate-limited 5/min |
+| GET | `/documents` | API key | |
+| GET | `/health` | none | ChromaDB + Postgres reachability |
+| GET | `/metrics` | none | Prometheus scrape target |
+
+### Frontend (`frontend/`)
+
+Next.js 16 + React 19 app. **Next.js 16 has breaking API changes from earlier versions** — before writing any Next.js-specific code, read the relevant guide in `node_modules/next/dist/docs/` and heed deprecation notices. Do not rely on pre-16 conventions.
+
+Stack: TypeScript (strict), Tailwind CSS v4, Zustand v5 (client state in `lib/store/`), React Query v5 (server state in hooks), Radix UI primitives (`components/ui/`).
+
+Custom hooks in `hooks/` (`useChat`, `useDocuments`, `useHealth`) own all API calls via the client in `lib/api/`. The API base URL is configured via `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:8000`). All routes require the `API_KEY` header — set it in `lib/api/` client configuration.
+
 ## Testing patterns
 
 Unit tests mock at the interface boundary using `MockLLMClient`, `MockVectorStore`, and `MockSessionStore` from `tests/conftest.py` — these are plain classes with `AsyncMock` attributes (not ABC subclasses). Set `side_effect` on `mock_llm.complete` when a test calls it multiple times (e.g., route call then generate call). Default embed return is `[[0.1] * 384]`.
+
+`asyncio_mode = "auto"` is set in `pyproject.toml` — do **not** add `@pytest.mark.asyncio` to async tests; it causes a duplicate-mark error.
 
 Integration tests require ChromaDB via `make docker-up`. Mark with `@pytest.mark.integration` and import infra adapters inside the fixture, not at module level.
 

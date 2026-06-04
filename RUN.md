@@ -37,7 +37,7 @@ Optional fields (all have defaults):
 | `CHUNK_OVERLAP` | `50` | Overlap between chunks |
 | `RETRIEVAL_TOP_K` | `5` | Chunks returned per query |
 | `POSTGRES_DSN` | _(unset)_ | If set, enables persistent sessions via Postgres; otherwise uses in-memory |
-| `ALLOWED_ORIGINS` | `["*"]` | JSON list of allowed CORS origins — set to `["https://monapp.com"]` in prod |
+| `ALLOWED_ORIGINS` | `["http://localhost:3000"]` | JSON list of allowed CORS origins — set to `["https://monapp.com"]` in prod |
 | `RATE_LIMIT_CHAT` | `20/minute` | Rate limit on `/chat` per IP |
 | `RATE_LIMIT_INGEST` | `5/minute` | Rate limit on `/documents/ingest*` per IP |
 | `WORKERS` | `1` | Uvicorn worker count — set to `4` (or `2*CPU+1`) in prod |
@@ -51,7 +51,7 @@ Runs the API with hot reload. ChromaDB must be available (start it via Docker or
 
 ```bash
 make install           # uv sync + pre-commit install
-make docker-up         # starts ChromaDB, Postgres, Prometheus, Grafana
+make docker-up         # starts ChromaDB, Postgres, Prometheus, frontend (3000), Grafana (3001)
 docker compose stop app  # stop the app container so port 8000 is free
 make run               # uvicorn on http://localhost:8000 with --reload
 ```

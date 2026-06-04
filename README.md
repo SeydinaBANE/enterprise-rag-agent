@@ -74,7 +74,7 @@ make install
 cp .env.example .env
 # Renseigner OPENROUTER_API_KEY et API_KEY dans .env
 
-# 3. Démarrer les services (ChromaDB, Postgres, Prometheus, Grafana)
+# 3. Démarrer les services (ChromaDB, Postgres, Prometheus, frontend:3000, Grafana:3001)
 make docker-up
 
 # 4. Lancer l'API en mode développement (hot reload)
