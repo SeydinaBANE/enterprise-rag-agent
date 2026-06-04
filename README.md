@@ -41,9 +41,12 @@ Documents (PDF, TXT, URL)
 | **Ingestion multi-format** | PDF, TXT, MD, RST, URLs web (BeautifulSoup) |
 | **Mémoire de session** | Historique par `session_id`, max 10 tours (in-memory ou Postgres) |
 | **Guardrails** | Détection d'injection de prompt, redaction PII (SSN, email, téléphone) |
+| **Rate limiting** | slowapi — `/chat` 20 req/min, `/ingest` 5 req/min par IP (configurable) |
+| **Startup health check** | Vérifie ChromaDB et Postgres au démarrage — fail-fast avant d'accepter du trafic |
+| **Graceful shutdown** | Ferme le pool Postgres proprement à l'arrêt (SIGTERM) |
 | **Observabilité** | Prometheus metrics + Grafana dashboard provisionné automatiquement |
 | **Clean Architecture** | 4 couches strictes, dépendances uniquement vers l'intérieur |
-| **CI/CD** | GitHub Actions — lint, typecheck, sécurité, tests unitaires + intégration |
+| **CI/CD** | GitHub Actions — lint, typecheck, sécurité, couverture 80%, Trivy, tests e2e |
 
 ---
 
@@ -130,9 +133,9 @@ curl http://localhost:8000/documents \
 
 ```
 src/
-├── api/            # FastAPI routes, auth middleware, logging
-│   ├── routes/     # chat, documents, health + metrics
-│   └── middleware/ # API key auth, structured request logging
+├── api/            # FastAPI routes, lifespan, global exception handler
+│   ├── routes/     # chat (rate-limited), documents, health + metrics
+│   └── middleware/ # API key auth, rate limiter (slowapi), request logging
 ├── agent/          # LangGraph AgentGraph — route → rag_search → generate
 ├── core/           # Domain pur — ports (ABCs), models, exceptions, config
 ├── infra/          # Adaptateurs — LiteLLMClient, ChromaVectorStore, PostgresSessionStore
@@ -186,6 +189,10 @@ make test-integration  # tests e2e — nécessite make docker-up
 | `CHROMA_HOST` | | `localhost` | Hôte ChromaDB |
 | `CHROMA_PORT` | | `8001` | Port ChromaDB |
 | `POSTGRES_DSN` | | _(in-memory)_ | DSN Postgres pour sessions persistantes |
+| `ALLOWED_ORIGINS` | | `["*"]` | Origines CORS autorisées — restreindre en prod |
+| `RATE_LIMIT_CHAT` | | `20/minute` | Rate limit `/chat` par IP |
+| `RATE_LIMIT_INGEST` | | `5/minute` | Rate limit `/documents/ingest*` par IP |
+| `WORKERS` | | `1` | Workers uvicorn — mettre `4` en prod |
 | `MAX_CHUNK_SIZE` | | `512` | Taille max des chunks (tokens) |
 | `RETRIEVAL_TOP_K` | | `5` | Nombre de chunks retournés par requête |
 
