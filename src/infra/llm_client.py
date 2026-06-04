@@ -1,18 +1,47 @@
 from __future__ import annotations
 
-import os
+import asyncio
+import logging
+from collections.abc import Awaitable, Callable
+from typing import TypeVar
 
+import httpx
 import litellm
 
 from src.core.config import settings
 from src.core.exceptions import EmbeddingError, LLMError
 from src.core.ports import ILLMClient
 
+_T = TypeVar("_T")
+
+logger = logging.getLogger(__name__)
+
 
 class LiteLLMClient(ILLMClient):
     def __init__(self) -> None:
-        os.environ["OPENROUTER_API_KEY"] = settings.openrouter_api_key
         litellm.api_base = "https://openrouter.ai/api/v1"
+        self._timeout = settings.llm_timeout
+        self._max_retries = settings.llm_max_retries
+
+    async def _call_with_retry(
+        self,
+        call: Callable[..., Awaitable[_T]],
+        *args: object,
+        **kwargs: object,
+    ) -> _T:
+        last_exc: Exception | None = None
+        for attempt in range(self._max_retries + 1):
+            try:
+                return await asyncio.wait_for(call(*args, **kwargs), timeout=self._timeout)
+            except Exception as exc:
+                last_exc = exc
+                if attempt < self._max_retries:
+                    wait = 0.5 * (2**attempt)
+                    logger.warning(
+                        "llm_retry attempt=%d wait=%.1f error=%s", attempt + 1, wait, str(exc)
+                    )
+                    await asyncio.sleep(wait)
+        raise last_exc  # type: ignore[misc]
 
     async def complete(
         self,
@@ -20,7 +49,8 @@ class LiteLLMClient(ILLMClient):
         model: str | None = None,
     ) -> str:
         try:
-            response = await litellm.acompletion(
+            response = await self._call_with_retry(
+                litellm.acompletion,
                 model=f"openrouter/{model or settings.llm_model}",
                 messages=messages,
                 api_key=settings.openrouter_api_key,
@@ -33,7 +63,8 @@ class LiteLLMClient(ILLMClient):
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         try:
-            response = await litellm.aembedding(
+            response = await self._call_with_retry(
+                litellm.aembedding,
                 model=f"openrouter/{settings.embedding_model}",
                 input=texts,
                 api_key=settings.openrouter_api_key,
@@ -45,7 +76,11 @@ class LiteLLMClient(ILLMClient):
 
     async def is_healthy(self) -> bool:
         try:
-            await self.complete([{"role": "user", "content": "ping"}])
-            return True
-        except LLMError:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.head(
+                    "https://openrouter.ai/api/v1/auth/key",
+                    headers={"Authorization": f"Bearer {settings.openrouter_api_key}"},
+                )
+                return resp.status_code == 200
+        except Exception:
             return False

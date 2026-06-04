@@ -80,7 +80,7 @@ class MockLLMClient:
 class MockVectorStore:
     add_chunks: AsyncMock      # ne retourne rien par défaut
     search: AsyncMock          # return_value = [] (liste vide)
-    list_documents: AsyncMock  # return_value = []
+    list_documents: AsyncMock  # return_value = [] (ou [(id, count, ingested_at)])
     is_healthy: AsyncMock      # return_value = True
 ```
 
@@ -159,6 +159,54 @@ response = client.post(
     headers={"X-API-Key": "test-api-key"},
 )
 assert response.status_code == 200
+```
+
+### SSRF guard tests
+
+The SSRF guard blocks private IPs. Test via URL ingestion with a private IP:
+
+```python
+def test_ingest_url_ssrf_private_ip(client: TestClient) -> None:
+    response = client.post(
+        "/documents/ingest/url",
+        json={"url": "http://10.0.0.1/secret"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 422
+    assert "private" in response.json()["detail"].lower()
+```
+
+### File upload limit tests
+
+Uploading a file exceeding `MAX_UPLOAD_SIZE_MB` returns HTTP 413:
+
+```python
+def test_upload_exceeds_limit(client: TestClient) -> None:
+    oversized_data = b"x" * (50 * 1024 * 1024 + 1)
+    response = client.post(
+        "/documents/ingest",
+        files={"file": ("big.pdf", oversized_data, "application/pdf")},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 413
+```
+
+### Ingestion metadata tests
+
+After ingesting a document, `list_documents` returns the `ingested_at` timestamp from ChromaDB metadata:
+
+```python
+async def test_ingested_at_in_metadata(
+    mock_vector_store: MockVectorStore,
+) -> None:
+    mock_vector_store.list_documents.return_value = [
+        ("doc-1", 3, "2026-06-04T12:00:00")
+    ]
+    result = await mock_vector_store.list_documents()
+    assert len(result) == 1
+    doc_id, chunk_count, ingested_at = result[0]
+    assert isinstance(ingested_at, str)
+    assert "T" in ingested_at
 ```
 
 ---

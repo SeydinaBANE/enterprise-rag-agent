@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pytest
 
 from src.core.models import Chunk, Document
@@ -97,6 +95,162 @@ def test_get_loader_url() -> None:
     from src.rag.ingestion.loader import URLLoader, get_loader
 
     assert isinstance(get_loader("https://example.com/page"), URLLoader)
+
+
+def test_is_private_host() -> None:
+    from src.rag.ingestion.loader import _is_private_host
+
+    assert _is_private_host("127.0.0.1") is True
+    assert _is_private_host("10.0.0.5") is True
+    assert _is_private_host("192.168.1.1") is True
+    assert _is_private_host("172.16.0.1") is True
+    assert _is_private_host("169.254.1.1") is True
+    assert _is_private_host("8.8.8.8") is False
+    assert _is_private_host("::1") is True
+    assert _is_private_host("invalid-host-that-does-not-exist-12345") is True  # OSError → private
+
+
+def test_get_loader_url_validates_private_ip() -> None:
+    from src.core.exceptions import UnsupportedSourceError
+    from src.rag.ingestion.loader import URLLoader
+
+    loader = URLLoader()
+    assert loader is not None
+
+    from src.rag.ingestion.loader import _validate_url
+
+    with pytest.raises(UnsupportedSourceError):
+        _validate_url("http://127.0.0.1:5000/admin")
+
+    with pytest.raises(UnsupportedSourceError):
+        _validate_url("http://10.0.0.1/secret")
+
+
+def test_get_loader_url_validates_hostname() -> None:
+    from src.core.exceptions import UnsupportedSourceError
+    from src.rag.ingestion.loader import _validate_url
+
+    with pytest.raises(UnsupportedSourceError):
+        _validate_url("http://localhost:8000/internal")
+
+
+def test_get_loader_url_validates_allowed_domains(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.core.config import settings
+    from src.core.exceptions import UnsupportedSourceError
+
+    monkeypatch.setattr(settings, "allowed_url_domains", "example.com")
+    from src.rag.ingestion.loader import _validate_url
+
+    with pytest.raises(UnsupportedSourceError):
+        _validate_url("http://evil.com/data")
+
+
+def test_get_loader_url_allows_public_domain() -> None:
+    from src.rag.ingestion.loader import _validate_url
+
+    _validate_url("https://example.com/page")
+    _validate_url("https://www.wikipedia.org")
+
+
+@pytest.mark.asyncio
+async def test_url_loader_loads_content() -> None:
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from src.rag.ingestion.loader import URLLoader
+
+    mock_response = MagicMock()
+    mock_response.text = "<html><body>Hello world</body></html>"
+    mock_response.raise_for_status = MagicMock()
+
+    with patch("httpx.AsyncClient") as mock_client:
+        mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+
+        loader = URLLoader()
+        docs = await loader.load("https://example.com/page")
+
+    assert len(docs) == 1
+    assert "Hello world" in docs[0].content
+
+
+@pytest.mark.asyncio
+async def test_url_loader_http_error() -> None:
+    from unittest.mock import AsyncMock, patch
+
+    import httpx
+
+    from src.rag.ingestion.loader import URLLoader  # noqa: I001
+
+    async def _raise(*args: object, **kwargs: object) -> None:
+        raise httpx.HTTPStatusError("404", request=None, response=None)  # type: ignore[call-arg]
+
+    with patch("httpx.AsyncClient") as mock_client:
+        mock_client.return_value.__aenter__.return_value.get = AsyncMock(side_effect=_raise)
+
+        loader = URLLoader()
+        with pytest.raises(httpx.HTTPStatusError):
+            await loader.load("https://example.com/notfound")
+
+
+@pytest.mark.asyncio
+async def test_url_loader_rejects_private_ip() -> None:
+    from src.core.exceptions import UnsupportedSourceError
+    from src.rag.ingestion.loader import URLLoader
+
+    loader = URLLoader()
+    with pytest.raises(UnsupportedSourceError):
+        await loader.load("http://127.0.0.1:5000/admin")
+
+
+@pytest.mark.asyncio
+async def test_pdf_loader_loads_content() -> None:
+    from io import BytesIO
+
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    writer.add_blank_page(612, 792)
+    buf = BytesIO()
+    writer.write(buf)
+    buf.seek(0)
+
+    import os
+    import tempfile
+
+    from src.rag.ingestion.loader import PDFLoader
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.write(buf.getvalue())
+        path = f.name
+
+    try:
+        loader = PDFLoader()
+        docs = await loader.load(path)
+        assert len(docs) == 1
+    finally:
+        os.unlink(path)
+
+
+@pytest.mark.asyncio
+async def test_url_loader_strips_tags() -> None:
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from src.rag.ingestion.loader import URLLoader
+
+    mock_response = MagicMock()
+    mock_response.text = "<html><body><nav>Navbar</nav><div>Content</div></body></html>"
+    mock_response.raise_for_status = MagicMock()
+
+    with patch("httpx.AsyncClient") as mock_client:
+        mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+
+        loader = URLLoader()
+        docs = await loader.load("https://example.com/page")
+
+    assert len(docs) == 1
+    assert "Navbar" not in docs[0].content
+    assert "Content" in docs[0].content
 
 
 def test_get_loader_unsupported() -> None:

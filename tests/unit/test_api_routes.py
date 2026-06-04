@@ -127,12 +127,27 @@ def test_ingest_url_success(client: TestClient, mock_llm: MockLLMClient) -> None
 
 
 def test_list_documents(client: TestClient, mock_vector_store: MockVectorStore) -> None:
-    mock_vector_store.list_documents.return_value = [("doc-1", 5), ("doc-2", 3)]
+    mock_vector_store.list_documents.return_value = [("doc-1", 5, ""), ("doc-2", 3, "")]
     response = client.get("/documents", headers={"X-API-Key": "test-api-key"})
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 2
     assert len(data["documents"]) == 2
+
+
+def test_ingest_file_unsupported_source_error(client: TestClient) -> None:
+    from src.core.exceptions import UnsupportedSourceError
+
+    with patch(
+        "src.rag.ingestion.pipeline.get_loader",
+        side_effect=UnsupportedSourceError("unsupported"),
+    ):
+        response = client.post(
+            "/documents/ingest",
+            files={"file": ("test.xyz", b"hello", "text/plain")},
+            headers={"X-API-Key": "test-api-key"},
+        )
+    assert response.status_code == 422
 
 
 def test_ingest_file_embedding_error(client: TestClient) -> None:
@@ -150,6 +165,21 @@ def test_ingest_file_embedding_error(client: TestClient) -> None:
     assert response.status_code == 502
 
 
+def test_ingest_url_vector_store_error(client: TestClient) -> None:
+    from src.core.exceptions import VectorStoreError
+
+    with patch(
+        "src.rag.ingestion.pipeline.get_loader",
+        side_effect=VectorStoreError("db down"),
+    ):
+        response = client.post(
+            "/documents/ingest/url",
+            json={"url": "https://example.com"},
+            headers={"X-API-Key": "test-api-key"},
+        )
+    assert response.status_code == 500
+
+
 def test_ingest_url_embedding_error(client: TestClient) -> None:
     from src.core.exceptions import EmbeddingError
 
@@ -163,6 +193,46 @@ def test_ingest_url_embedding_error(client: TestClient) -> None:
             headers={"X-API-Key": "test-api-key"},
         )
     assert response.status_code == 502
+
+
+def test_list_documents_with_ingested_at(
+    client: TestClient, mock_vector_store: MockVectorStore
+) -> None:
+    mock_vector_store.list_documents.return_value = [
+        ("doc-1", 5, "2026-06-01T12:00:00"),
+        ("doc-2", 3, ""),
+    ]
+    response = client.get("/documents", headers={"X-API-Key": "test-api-key"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 2
+    assert data["documents"][0]["id"] == "doc-1"
+    assert data["documents"][1]["chunks"] == 3
+
+
+def test_ingest_file_vector_store_error(
+    client: TestClient, mock_vector_store: MockVectorStore
+) -> None:
+    from src.core.exceptions import VectorStoreError
+
+    mock_vector_store.add_chunks.side_effect = VectorStoreError("db down")
+    response = client.post(
+        "/documents/ingest",
+        files={"file": ("test.txt", b"hello", "text/plain")},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 500
+
+
+def test_ingest_file_too_large(client: TestClient) -> None:
+    oversized = b"x" * (51 * 1024 * 1024)
+    response = client.post(
+        "/documents/ingest",
+        files={"file": ("big.txt", oversized, "text/plain")},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 413
+    assert "MB limit" in response.json()["detail"]
 
 
 def test_list_documents_storage_error(

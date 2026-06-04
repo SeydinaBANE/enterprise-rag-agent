@@ -48,8 +48,11 @@ Règles non négociables pour contribuer à ce projet.
 - Toute sortie LLM passe par `filters.check_output()` avant d'être retournée
 - `X-API-Key` est obligatoire sur tous les endpoints data — jamais sur `/health` ni `/metrics`
 - Pas de secrets, d'IPs, ni de chemins absolus dans le code
-- Rate limiting via `@limiter.limit(settings.rate_limit_chat)` sur toute route coûteuse (LLM, ingest). Le paramètre `request: Request` doit être **en premier** dans la signature de la fonction pour que slowapi le détecte
-- `ALLOWED_ORIGINS` doit être restreint en production — ne jamais laisser `["*"]` face à Internet
+- Rate limiting via `@limiter.limit(settings.rate_limit_chat)` sur toute route coûteuse (LLM, ingest). Le paramètre `request: Request` doit être **en premier** dans la signature de la fonction pour que slowapi le détecte. La détection IP utilise X-Forwarded-For — configurer `TRUSTED_PROXIES` si validation avancée nécessaire
+- `ALLOWED_ORIGINS` doit être restreint en production — ne jamais laisser `["*"]` face à Internet (valeur par défaut : `["http://localhost:3000"]`)
+- **SSRF** : toute ingestion d'URL valide le résolveur DNS et bloque les IPs privées (10.x, 172.16-31.x, 192.168.x, 127.x, ::1, fc00::/7). Restreindre avec `ALLOWED_URL_DOMAINS` en production
+- **Taille d'upload** : `MAX_UPLOAD_SIZE_MB` (défaut 50 Mo) — dépassement → HTTP 413
+- **Timeout LLM** : `LLM_TIMEOUT` secondes (défaut 60) avec `LLM_MAX_RETRIES` tentatives (défaut 2, backoff exponentiel)
 
 ## Workflow Git
 

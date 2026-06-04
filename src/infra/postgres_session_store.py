@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from psycopg_pool import AsyncConnectionPool
 
+from src.core.config import settings
 from src.core.exceptions import VectorStoreError
 from src.core.models import ChatMessage
 from src.core.ports import ISessionStore
@@ -35,7 +36,12 @@ class PostgresSessionStore(ISessionStore):
 
     async def _get_pool(self) -> AsyncConnectionPool:
         if self._pool is None:
-            self._pool = AsyncConnectionPool(self._dsn, open=False)
+            self._pool = AsyncConnectionPool(
+                self._dsn,
+                open=False,
+                min_size=settings.postgres_pool_min,
+                max_size=settings.postgres_pool_max,
+            )
             await self._pool.open()
             async with self._pool.connection() as conn:
                 await conn.execute(_SCHEMA)
