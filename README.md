@@ -1,84 +1,212 @@
+<div align="center">
+
 # Enterprise RAG Agent
 
-Production-grade agentic RAG system built for enterprise knowledge management.
+**Production-grade agentic RAG system for enterprise knowledge management**
 
-## Features
+[![CI](https://github.com/SeydinaBANE/enterprise-rag-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/SeydinaBANE/enterprise-rag-agent/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.12-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-1C3C3C?logo=langchain&logoColor=white)](https://langchain-ai.github.io/langgraph/)
+[![ChromaDB](https://img.shields.io/badge/ChromaDB-0.5+-FF6719?logoColor=white)](https://www.trychroma.com/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![codecov](https://codecov.io/gh/SeydinaBANE/enterprise-rag-agent/branch/main/graph/badge.svg)](https://codecov.io/gh/SeydinaBANE/enterprise-rag-agent)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-261230?logo=ruff)](https://github.com/astral-sh/ruff)
 
-- **Autonomous LangGraph agent** — plans, reasons, and executes across tools
-- **Document ingestion** — PDF, plain text, and web URLs into ChromaDB
-- **Knowledge-grounded answers** — cited responses with source references
-- **REST API** — FastAPI with API key auth and streaming support
-- **Observability** — OpenTelemetry traces + Prometheus metrics + Grafana dashboards
-- **Security guardrails** — PII detection, prompt injection protection, input validation
-- **Production-grade CI/CD** — GitHub Actions, Docker image published to ghcr.io
+</div>
 
-## Quick Start
+---
+
+## Vue d'ensemble
+
+Un agent RAG (Retrieval-Augmented Generation) autonome, prêt pour la production. L'agent décide seul s'il doit chercher dans la base documentaire ou répondre directement, cite ses sources, et maintient un historique de conversation par session.
+
+```
+Documents (PDF, TXT, URL)
+        ↓ ingestion
+   ChromaDB (vecteurs)
+        ↓ retrieval
+  LangGraph Agent ──→ OpenRouter LLM ──→ Réponse citée
+        ↑
+   FastAPI REST API
+```
+
+---
+
+## Fonctionnalités
+
+| Fonctionnalité | Détail |
+|---|---|
+| **Agent autonome** | LangGraph — route automatiquement entre RAG et réponse directe |
+| **Ingestion multi-format** | PDF, TXT, MD, RST, URLs web (BeautifulSoup) |
+| **Mémoire de session** | Historique par `session_id`, max 10 tours (in-memory ou Postgres) |
+| **Guardrails** | Détection d'injection de prompt, redaction PII (SSN, email, téléphone) |
+| **Observabilité** | Prometheus metrics + Grafana dashboard provisionné automatiquement |
+| **Clean Architecture** | 4 couches strictes, dépendances uniquement vers l'intérieur |
+| **CI/CD** | GitHub Actions — lint, typecheck, sécurité, tests unitaires + intégration |
+
+---
+
+## Démarrage rapide
+
+### Prérequis
+
+- Python 3.12+ avec [uv](https://docs.astral.sh/uv/)
+- Docker & Docker Compose
+- Clé API [OpenRouter](https://openrouter.ai)
+
+### Installation
 
 ```bash
-# 1. Install dependencies
+# 1. Cloner et installer
+git clone https://github.com/SeydinaBANE/enterprise-rag-agent.git
+cd enterprise-rag-agent
 make install
 
-# 2. Configure environment
+# 2. Configurer l'environnement
 cp .env.example .env
-# Edit .env: set OPENROUTER_API_KEY and API_KEY
+# Renseigner OPENROUTER_API_KEY et API_KEY dans .env
 
-# 3. Start infrastructure
+# 3. Démarrer les services (ChromaDB, Postgres, Prometheus, Grafana)
 make docker-up
 
-# 4. Start API
+# 4. Lancer l'API en mode développement (hot reload)
+docker compose stop app   # libérer le port 8000
 make run
 # → http://localhost:8000/docs
 ```
 
-## Usage
+---
 
-### Ingest a document
+## Utilisation
+
+### Ingérer un document
 
 ```bash
+# Fichier local (PDF, TXT, MD…)
 curl -X POST http://localhost:8000/documents/ingest \
   -H "X-API-Key: your-api-key" \
-  -F "file=@contract.pdf"
+  -F "file=@contrat.pdf"
+
+# URL web
+curl -X POST http://localhost:8000/documents/ingest/url \
+  -H "X-API-Key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com/article"}'
 ```
 
-### Ask the agent
+### Interroger l'agent
 
 ```bash
 curl -X POST http://localhost:8000/chat \
   -H "X-API-Key: your-api-key" \
   -H "Content-Type: application/json" \
-  -d '{"message": "What does the contract say about termination?", "session_id": "user-1"}'
+  -d '{
+    "message": "Que dit le contrat sur les conditions de résiliation ?",
+    "session_id": "session-user-1"
+  }'
 ```
+
+```json
+{
+  "answer": "Selon [Source: contrat.pdf], la résiliation...",
+  "sources": [{"document_id": "contrat.pdf", "chunk": "...", "score": 0.0}],
+  "session_id": "session-user-1",
+  "used_retrieval": true,
+  "latency_ms": 1842.3
+}
+```
+
+### Lister les documents ingérés
+
+```bash
+curl http://localhost:8000/documents \
+  -H "X-API-Key: your-api-key"
+```
+
+---
+
+## Architecture
+
+```
+src/
+├── api/            # FastAPI routes, auth middleware, logging
+│   ├── routes/     # chat, documents, health + metrics
+│   └── middleware/ # API key auth, structured request logging
+├── agent/          # LangGraph AgentGraph — route → rag_search → generate
+├── core/           # Domain pur — ports (ABCs), models, exceptions, config
+├── infra/          # Adaptateurs — LiteLLMClient, ChromaVectorStore, PostgresSessionStore
+├── rag/            # Pipeline d'ingestion — loader, splitter, embedder, retriever
+├── guardrails/     # Filtres input/output — injection, PII
+└── observability/  # Métriques Prometheus — singletons module-level
+```
+
+**Règle d'or** : les dépendances ne vont que vers `core/`. `infra/` et `api/` implémentent les interfaces de `core/` — jamais l'inverse.
+
+---
+
+## Observabilité
+
+| Service | URL | Accès |
+|---|---|---|
+| API docs (Swagger) | http://localhost:8000/docs | public |
+| Métriques Prometheus | http://localhost:8000/metrics | public |
+| Prometheus UI | http://localhost:9090 | — |
+| Grafana | http://localhost:3000 | admin / admin |
+
+Le dashboard Grafana est provisionné automatiquement au démarrage avec :
+- Nombre de requêtes chat (total + taux par statut)
+- Sessions actives
+- Latence LLM P95 et Retrieval P95
+
+---
+
+## Qualité & Tests
+
+```bash
+make check          # lint + typecheck + sécurité + tests (tout doit passer)
+make test           # tests unitaires seuls — rapide, sans Docker
+make test-integration  # tests e2e — nécessite make docker-up
+```
+
+- **80 %** de couverture requise sur les tests unitaires
+- Lint : `ruff`, Typage : `mypy --strict`, Sécurité : `bandit`
+- Pre-commit hooks : ruff, mypy, detect-private-key, commitlint
+
+---
+
+## Variables d'environnement
+
+| Variable | Obligatoire | Défaut | Description |
+|---|---|---|---|
+| `OPENROUTER_API_KEY` | ✅ | — | Clé OpenRouter |
+| `API_KEY` | ✅ | — | Token `X-API-Key` pour les clients |
+| `LLM_MODEL` | | `openai/gpt-4o-mini` | Modèle de chat |
+| `EMBEDDING_MODEL` | | `openai/text-embedding-3-small` | Modèle d'embedding |
+| `CHROMA_HOST` | | `localhost` | Hôte ChromaDB |
+| `CHROMA_PORT` | | `8001` | Port ChromaDB |
+| `POSTGRES_DSN` | | _(in-memory)_ | DSN Postgres pour sessions persistantes |
+| `MAX_CHUNK_SIZE` | | `512` | Taille max des chunks (tokens) |
+| `RETRIEVAL_TOP_K` | | `5` | Nombre de chunks retournés par requête |
+
+---
 
 ## Documentation
 
-| File | Description |
+| Fichier | Contenu |
 |---|---|
-| [PLAN.md](PLAN.md) | Architecture decisions and design rationale |
-| [PROJECT.md](PROJECT.md) | Project scope, goals, and stakeholders |
-| [BUILD.md](BUILD.md) | Build and dependency management guide |
-| [DEV.md](DEV.md) | Developer workflow and contribution guide |
-| [DEPLOY.md](DEPLOY.md) | Deployment and operations guide |
-| [CLI.md](CLI.md) | Full API and CLI reference |
-| [TODO.md](TODO.md) | Roadmap and outstanding work |
-| [docs/architecture.md](docs/architecture.md) | Architecture diagrams |
+| [CLAUDE.md](CLAUDE.md) | Guide architecture pour Claude Code |
+| [RUN.md](RUN.md) | Runbook opérationnel complet |
+| [BONNES-PRATIQUES.md](BONNES-PRATIQUES.md) | Règles de contribution |
+| [PROMETHEUS.md](PROMETHEUS.md) | Métriques et requêtes PromQL |
+| [GRAFANA.md](GRAFANA.md) | Dashboards et provisioning |
+| [BUILD.md](BUILD.md) | Build et gestion des dépendances |
+| [DEPLOY.md](DEPLOY.md) | Déploiement et opérations |
+| [docs/architecture.md](docs/architecture.md) | Diagrammes d'architecture |
 | [docs/adr/](docs/adr/) | Architecture Decision Records |
 
-## Observability
+---
 
-| Service | URL |
-|---|---|
-| API docs | http://localhost:8000/docs |
-| Metrics | http://localhost:8000/metrics |
-| Grafana | http://localhost:3000 (admin/admin) |
-| Prometheus | http://localhost:9090 |
+## Licence
 
-## Requirements
-
-- Python 3.12+
-- [uv](https://github.com/astral-sh/uv)
-- Docker + Docker Compose
-- OpenRouter API key
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+MIT — voir [LICENSE](LICENSE).
