@@ -39,6 +39,10 @@ structlog.configure(
 def _build_session_store() -> ISessionStore:
     if settings.postgres_dsn:
         return PostgresSessionStore(settings.postgres_dsn)
+    logger.warning(
+        "No POSTGRES_DSN configured — using in-memory session store. "
+        "Sessions will be lost on restart."
+    )
     return InMemorySessionStore()
 
 
@@ -72,6 +76,7 @@ def create_app() -> FastAPI:
     )
 
     app.state.limiter = limiter
+    # slowapi's handler has a slightly different signature than FastAPI expects
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
     @app.exception_handler(Exception)

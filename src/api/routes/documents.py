@@ -16,6 +16,8 @@ from src.observability.telemetry import ingest_requests_total
 
 router = APIRouter()
 
+_MAX_FILE_SIZE = settings.max_upload_size_mb * 1024 * 1024
+
 
 @router.post(
     "/documents/ingest",
@@ -27,8 +29,15 @@ async def ingest_file(request: Request, file: UploadFile) -> IngestResponse:
     pipeline = request.app.state.pipeline
     suffix = Path(file.filename or "upload").suffix or ".bin"
 
+    data = await file.read()
+    if len(data) > _MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds {settings.max_upload_size_mb} MB limit",
+        )
+
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(await file.read())
+        tmp.write(data)
         tmp_path = tmp.name
 
     try:
@@ -89,8 +98,12 @@ async def list_documents(request: Request) -> dict[str, Any]:
     except VectorStoreError as exc:
         raise HTTPException(status_code=500, detail="Storage error") from exc
 
-    documents = [
-        DocumentMeta(id=doc_id, chunks=count, ingested_at=datetime.utcnow())
-        for doc_id, count in doc_list
-    ]
+    documents = []
+    for doc_id, count, ingested_at_str in doc_list:
+        if ingested_at_str:
+            ingested_at = datetime.fromisoformat(ingested_at_str)
+        else:
+            ingested_at = datetime.utcnow()
+        documents.append(DocumentMeta(id=doc_id, chunks=count, ingested_at=ingested_at))
+
     return {"documents": [d.model_dump() for d in documents], "total": len(documents)}

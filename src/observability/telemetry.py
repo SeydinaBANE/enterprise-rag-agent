@@ -30,3 +30,10 @@ active_sessions = Gauge(
     "active_sessions",
     "Number of active chat sessions",
 )
+
+http_request_duration_seconds = Histogram(
+    "http_request_duration_seconds",
+    "HTTP request duration in seconds",
+    labelnames=["method", "path", "status"],
+    buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
+)

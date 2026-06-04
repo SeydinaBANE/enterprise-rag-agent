@@ -39,12 +39,14 @@ Documents (PDF, TXT, URL)
 |---|---|
 | **Agent autonome** | LangGraph — route automatiquement entre RAG et réponse directe |
 | **Ingestion multi-format** | PDF, TXT, MD, RST, URLs web (BeautifulSoup) |
-| **Mémoire de session** | Historique par `session_id`, max 10 tours (in-memory ou Postgres) |
+| **Protection SSRF** | Résolution DNS + blocage IPs privées sur toute ingestion URL |
+| **Limite d'upload** | 50 Mo max par fichier (configurable) |
+| **Mémoire de session** | Historique par `session_id`, max 10 tours (in-memory ou Postgres avec pool configurable) |
 | **Guardrails** | Détection d'injection de prompt, redaction PII (SSN, email, téléphone) |
-| **Rate limiting** | slowapi — `/chat` 20 req/min, `/ingest` 5 req/min par IP (configurable) |
+| **Rate limiting** | slowapi — `/chat` 20 req/min, `/ingest` 5 req/min par IP (proxy-aware) |
 | **Startup health check** | Vérifie ChromaDB et Postgres au démarrage — fail-fast avant d'accepter du trafic |
 | **Graceful shutdown** | Ferme le pool Postgres proprement à l'arrêt (SIGTERM) |
-| **Observabilité** | Prometheus metrics + Grafana dashboard provisionné automatiquement |
+| **Observabilité** | Prometheus metrics (latence LLM/retrieval, requêtes, sessions) + Grafana |
 | **Clean Architecture** | 4 couches strictes, dépendances uniquement vers l'intérieur |
 | **CI/CD** | GitHub Actions — lint, typecheck, sécurité, couverture 80%, Trivy, tests e2e |
 
@@ -188,10 +190,17 @@ make test-integration  # tests e2e — nécessite make docker-up
 | `EMBEDDING_MODEL` | | `openai/text-embedding-3-small` | Modèle d'embedding |
 | `CHROMA_HOST` | | `localhost` | Hôte ChromaDB |
 | `CHROMA_PORT` | | `8001` | Port ChromaDB |
-| `POSTGRES_DSN` | | _(in-memory)_ | DSN Postgres pour sessions persistantes |
-| `ALLOWED_ORIGINS` | | `["*"]` | Origines CORS autorisées — restreindre en prod |
+| `LLM_TIMEOUT` | | `60` | Timeout appel LLM (secondes) |
+| `LLM_MAX_RETRIES` | | `2` | Tentatives max LLM avec backoff exponentiel |
+| `MAX_UPLOAD_SIZE_MB` | | `50` | Taille max upload (Mo) |
+| `ALLOWED_ORIGINS` | | `["http://localhost:3000"]` | Origines CORS autorisées — restreindre en prod |
 | `RATE_LIMIT_CHAT` | | `20/minute` | Rate limit `/chat` par IP |
 | `RATE_LIMIT_INGEST` | | `5/minute` | Rate limit `/documents/ingest*` par IP |
+| `POSTGRES_DSN` | | _(in-memory)_ | DSN Postgres pour sessions persistantes |
+| `POSTGRES_POOL_MIN` | | `2` | Connexions min pool Postgres |
+| `POSTGRES_POOL_MAX` | | `10` | Connexions max pool Postgres |
+| `ALLOWED_URL_DOMAINS` | | `[]` | Domaines autorisés pour ingestion URL (vide = tous) |
+| `TRUSTED_PROXIES` | | `0` | Nombre de reverse proxies de confiance |
 | `WORKERS` | | `1` | Workers uvicorn — mettre `4` en prod |
 | `MAX_CHUNK_SIZE` | | `512` | Taille max des chunks (tokens) |
 | `RETRIEVAL_TOP_K` | | `5` | Nombre de chunks retournés par requête |

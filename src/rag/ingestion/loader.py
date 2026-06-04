@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ipaddress
+import socket
 import uuid
 from pathlib import Path
 
@@ -7,9 +9,51 @@ import httpx
 from bs4 import BeautifulSoup
 from pypdf import PdfReader
 
+from src.core.config import settings
 from src.core.exceptions import UnsupportedSourceError
 from src.core.models import Document
 from src.core.ports import IDocumentLoader
+
+_PRIVATE_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+]
+
+
+def _is_private_host(host: str) -> bool:
+    try:
+        addr = ipaddress.ip_address(host)
+        return any(addr in net for net in _PRIVATE_NETWORKS)
+    except ValueError:
+        pass
+    try:
+        resolved = socket.getaddrinfo(host, 80, family=socket.AF_INET)
+        for _family, _, _, _, sockaddr in resolved:
+            addr = ipaddress.ip_address(sockaddr[0])
+            if any(addr in net for net in _PRIVATE_NETWORKS):
+                return True
+    except OSError:
+        return True
+    return False
+
+
+def _validate_url(source: str) -> None:
+    from urllib.parse import urlparse
+
+    parsed = urlparse(source)
+    host = parsed.hostname or ""
+    if _is_private_host(host):
+        raise UnsupportedSourceError(f"URL resolves to a private address: {host}")
+    allowed = settings.allowed_url_domains
+    if allowed:
+        allowed_domains = [d.strip() for d in allowed.split(",") if d.strip()]
+        if allowed_domains and not any(host.endswith(d) for d in allowed_domains):
+            raise UnsupportedSourceError(f"Domain {host} is not in the allowed list: {allowed}")
 
 
 class PDFLoader(IDocumentLoader):
@@ -28,7 +72,11 @@ class TextLoader(IDocumentLoader):
 
 class URLLoader(IDocumentLoader):
     async def load(self, source: str) -> list[Document]:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=15) as client:
+        _validate_url(source)
+        async with httpx.AsyncClient(
+            follow_redirects=True,
+            timeout=httpx.Timeout(15.0, connect=5.0),
+        ) as client:
             response = await client.get(source)
             response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
