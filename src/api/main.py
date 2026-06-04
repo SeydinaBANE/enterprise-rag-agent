@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+import traceback
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from src.agent.graph import build_agent
 from src.agent.memory import InMemorySessionStore
 from src.agent.tools import RAGSearchTool
 from src.api.middleware.logging import RequestLoggingMiddleware
+from src.api.middleware.ratelimit import limiter
 from src.api.routes import chat, documents, health
 from src.core.config import settings
 from src.core.ports import ISessionStore
@@ -16,6 +24,8 @@ from src.infra.vector_store import ChromaVectorStore
 from src.rag.embedder import Embedder
 from src.rag.ingestion.pipeline import IngestPipeline
 from src.rag.retriever import Retriever
+
+logger = structlog.get_logger()
 
 structlog.configure(
     processors=[
@@ -33,16 +43,58 @@ def _build_session_store() -> ISessionStore:
     return InMemorySessionStore()
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    vector_store: ChromaVectorStore = app.state.vector_store
+    session_store: ISessionStore = app.state.session_store
+
+    if not await vector_store.is_healthy():
+        raise RuntimeError(
+            f"ChromaDB is not reachable at {settings.chroma_host}:{settings.chroma_port}"
+        )
+
+    if settings.postgres_dsn and not await session_store.is_healthy():
+        raise RuntimeError("Postgres session store is not reachable at startup")
+
+    logger.info("startup_complete", chroma_host=settings.chroma_host)
+    yield
+
+    from src.infra.postgres_session_store import PostgresSessionStore
+
+    if isinstance(session_store, PostgresSessionStore):
+        await session_store.close()
+        logger.info("postgres_pool_closed")
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Enterprise RAG Agent",
         description="Production-grade agentic RAG system for enterprise knowledge management",
         version="0.1.0",
+        lifespan=_lifespan,
     )
+
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+
+    @app.exception_handler(Exception)
+    async def _global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        request_id = getattr(request.state, "request_id", "unknown")
+        logger.error(
+            "unhandled_exception",
+            request_id=request_id,
+            path=request.url.path,
+            error=str(exc),
+            traceback=traceback.format_exc(),
+        )
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error", "request_id": request_id},
+        )
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.allowed_origins,
         allow_methods=["*"],
         allow_headers=["*"],
     )

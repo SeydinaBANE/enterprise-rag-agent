@@ -8,7 +8,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 
 from src.api.middleware.auth import require_api_key
-from src.core.exceptions import UnsupportedSourceError, VectorStoreError
+from src.api.middleware.ratelimit import limiter
+from src.core.config import settings
+from src.core.exceptions import EmbeddingError, UnsupportedSourceError, VectorStoreError
 from src.core.models import DocumentMeta, IngestRequest, IngestResponse
 from src.observability.telemetry import ingest_requests_total
 
@@ -20,6 +22,7 @@ router = APIRouter()
     response_model=IngestResponse,
     dependencies=[Depends(require_api_key)],
 )
+@limiter.limit(settings.rate_limit_ingest)
 async def ingest_file(request: Request, file: UploadFile) -> IngestResponse:
     pipeline = request.app.state.pipeline
     suffix = Path(file.filename or "upload").suffix or ".bin"
@@ -33,6 +36,9 @@ async def ingest_file(request: Request, file: UploadFile) -> IngestResponse:
     except UnsupportedSourceError as exc:
         ingest_requests_total.labels(status="unsupported").inc()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except EmbeddingError as exc:
+        ingest_requests_total.labels(status="error").inc()
+        raise HTTPException(status_code=502, detail="Embedding service error") from exc
     except VectorStoreError as exc:
         ingest_requests_total.labels(status="error").inc()
         raise HTTPException(status_code=500, detail="Storage error") from exc
@@ -51,7 +57,8 @@ async def ingest_file(request: Request, file: UploadFile) -> IngestResponse:
     response_model=IngestResponse,
     dependencies=[Depends(require_api_key)],
 )
-async def ingest_url(body: IngestRequest, request: Request) -> IngestResponse:
+@limiter.limit(settings.rate_limit_ingest)
+async def ingest_url(request: Request, body: IngestRequest) -> IngestResponse:
     pipeline = request.app.state.pipeline
 
     try:
@@ -59,6 +66,9 @@ async def ingest_url(body: IngestRequest, request: Request) -> IngestResponse:
     except UnsupportedSourceError as exc:
         ingest_requests_total.labels(status="unsupported").inc()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except EmbeddingError as exc:
+        ingest_requests_total.labels(status="error").inc()
+        raise HTTPException(status_code=502, detail="Embedding service error") from exc
     except VectorStoreError as exc:
         ingest_requests_total.labels(status="error").inc()
         raise HTTPException(status_code=500, detail="Storage error") from exc

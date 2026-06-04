@@ -25,5 +25,9 @@ class Settings(BaseSettings):
     otel_endpoint: str | None = None
     postgres_dsn: str | None = None
 
+    allowed_origins: list[str] = ["*"]
+    rate_limit_chat: str = "20/minute"
+    rate_limit_ingest: str = "5/minute"
+
 
 settings = Settings()  # type: ignore[call-arg]  # fields come from env vars

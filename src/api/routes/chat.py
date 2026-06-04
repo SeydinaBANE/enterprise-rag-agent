@@ -3,6 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from src.api.middleware.auth import require_api_key
+from src.api.middleware.ratelimit import limiter
+from src.core.config import settings
 from src.core.exceptions import GuardrailViolation, LLMError
 from src.core.models import ChatRequest, ChatResponse
 from src.guardrails import filters
@@ -12,7 +14,8 @@ router = APIRouter()
 
 
 @router.post("/chat", response_model=ChatResponse, dependencies=[Depends(require_api_key)])
-async def chat(body: ChatRequest, request: Request) -> ChatResponse:
+@limiter.limit(settings.rate_limit_chat)
+async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     try:
         filters.check_input(body.message)
     except GuardrailViolation as exc:

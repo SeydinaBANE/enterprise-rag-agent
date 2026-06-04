@@ -133,3 +133,43 @@ def test_list_documents(client: TestClient, mock_vector_store: MockVectorStore) 
     data = response.json()
     assert data["total"] == 2
     assert len(data["documents"]) == 2
+
+
+def test_ingest_file_embedding_error(client: TestClient) -> None:
+    from src.core.exceptions import EmbeddingError
+
+    with patch(
+        "src.rag.ingestion.pipeline.get_loader",
+        side_effect=EmbeddingError("embed failed"),
+    ):
+        response = client.post(
+            "/documents/ingest",
+            files={"file": ("test.txt", BytesIO(b"hello"), "text/plain")},
+            headers={"X-API-Key": "test-api-key"},
+        )
+    assert response.status_code == 502
+
+
+def test_ingest_url_embedding_error(client: TestClient) -> None:
+    from src.core.exceptions import EmbeddingError
+
+    with patch(
+        "src.rag.ingestion.pipeline.get_loader",
+        side_effect=EmbeddingError("embed failed"),
+    ):
+        response = client.post(
+            "/documents/ingest/url",
+            json={"url": "https://example.com"},
+            headers={"X-API-Key": "test-api-key"},
+        )
+    assert response.status_code == 502
+
+
+def test_list_documents_storage_error(
+    client: TestClient, mock_vector_store: MockVectorStore
+) -> None:
+    from src.core.exceptions import VectorStoreError
+
+    mock_vector_store.list_documents.side_effect = VectorStoreError("db down")
+    response = client.get("/documents", headers={"X-API-Key": "test-api-key"})
+    assert response.status_code == 500

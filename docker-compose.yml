@@ -7,7 +7,7 @@ services:
       - .env
     environment:
       CHROMA_HOST: chromadb
-      CHROMA_PORT: "8000"
+      CHROMA_PORT: "8001"
       POSTGRES_DSN: postgresql://rag:rag@postgres:5432/rag
     depends_on:
       chromadb:
