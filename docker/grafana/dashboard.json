@@ -1,0 +1,77 @@
+{
+  "title": "Enterprise RAG Agent",
+  "uid": "rag-agent-v1",
+  "version": 1,
+  "schemaVersion": 38,
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Chat Requests (total)",
+      "targets": [
+        {
+          "expr": "sum(chat_requests_total)",
+          "legendFormat": "Total"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Error Rate",
+      "targets": [
+        {
+          "expr": "sum(rate(chat_requests_total{status='error'}[5m])) / sum(rate(chat_requests_total[5m]))",
+          "legendFormat": "Error %"
+        }
+      ],
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Active Sessions",
+      "targets": [
+        {
+          "expr": "active_sessions",
+          "legendFormat": "Sessions"
+        }
+      ],
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "LLM Latency (P95)",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(llm_latency_seconds_bucket[5m]))",
+          "legendFormat": "P95 LLM"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(retrieval_latency_seconds_bucket[5m]))",
+          "legendFormat": "P95 Retrieval"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Request Rate",
+      "targets": [
+        {
+          "expr": "sum(rate(chat_requests_total{status='ok'}[5m]))",
+          "legendFormat": "OK"
+        },
+        {
+          "expr": "sum(rate(chat_requests_total{status='error'}[5m]))",
+          "legendFormat": "Error"
+        }
+      ],
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 }
+    }
+  ]
+}

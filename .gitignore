@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.eggs/
+dist/
+build/
+*.so
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# uv
+uv.lock
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Testing & coverage
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ChromaDB local data
+chroma_db/
+chroma/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Docker
+*.log
+
+# Secrets
+*.pem
+*.key
+secrets/
+# md
+offre.md
+PROJECT.md
+TODO.md
+PLAN.md
+CODE.md
+EXPLICATION.md
+RUN.md
