@@ -20,7 +20,9 @@ make typecheck            # mypy src/ (strict)
 make security             # bandit -r src/ -ll
 make test                 # pytest tests/unit/ --cov-fail-under=80 (fast, no Docker)
 make test-integration     # pytest tests/integration/ -m integration (requires make docker-up first)
+make test-all             # unit + integration tests together
 make check                # lint + typecheck + security + test
+make pre-commit-run       # run all pre-commit hooks against all files
 
 # Single test
 uv run pytest tests/unit/test_guardrails.py::test_check_input_valid -v
@@ -45,7 +47,7 @@ API (FastAPI) → Agent → Domain (core/) ← Infra (infra/)
 
 ### Domain layer (`src/core/`) — zero external dependencies
 
-- `config.py`: `Settings` (pydantic-settings). Instantiated as `settings` singleton at import time. All modules read from `settings`, never from `os.environ` directly. Key production fields: `allowed_origins` (list, default `["http://localhost:3000"]`), `rate_limit_chat` (default `"20/minute"`), `rate_limit_ingest` (default `"5/minute"`), `workers` (default `1`), `llm_timeout` (default `60`), `llm_max_retries` (default `2`), `max_upload_size_mb` (default `50`), `postgres_pool_min` (default `2`), `postgres_pool_max` (default `10`), `trusted_proxies` (default `0`), `allowed_url_domains` (default `[]`).
+- `config.py`: `Settings` (pydantic-settings). Instantiated as `settings` singleton at import time. All modules read from `settings`, never from `os.environ` directly. Key fields: `llm_model` (default `"openai/gpt-4o-mini"`), `embedding_model` (default `"openai/text-embedding-3-small"`), `retrieval_top_k` (default `5`), `max_chunk_size` (default `512`), `chunk_overlap` (default `50`), `allowed_origins` (list, default `["http://localhost:3000"]`), `rate_limit_chat` (default `"20/minute"`), `rate_limit_ingest` (default `"5/minute"`), `workers` (default `1`), `llm_timeout` (default `60`), `llm_max_retries` (default `2`), `max_upload_size_mb` (default `50`), `postgres_pool_min` (default `2`), `postgres_pool_max` (default `10`), `trusted_proxies` (default `0`), `allowed_url_domains` (default `""`, comma-separated string of allowed hostnames).
 - `ports.py`: Four ABCs — `ILLMClient`, `IVectorStore`, `IDocumentLoader`, `ISessionStore`. The entire codebase depends on these, never on concrete implementations.
 - `models.py`: All Pydantic models. `AgentState` is a `TypedDict` (mutable dict passed through agent steps).
 - `exceptions.py`: `GuardrailViolation`, `LLMError`, `EmbeddingError`, `VectorStoreError`, `DocumentNotFoundError`, `UnsupportedSourceError` — raised in domain/infra, caught in API routes.
@@ -67,11 +69,15 @@ Ingestion flow: `get_loader(source)` → `IDocumentLoader.load()` → `TextSplit
 2. `_rag_search()` — only if RAG; embeds query, retrieves chunks from vector store
 3. `_generate()` — LLM generates answer with conversation history + retrieved context
 
-Session memory lives in `InMemorySessionStore` (in-process dict of `ConversationMemory`, max 10 turns). All services are instantiated once in `create_app()` and stored on `app.state`.
+Session memory lives in `InMemorySessionStore` (in-process dict of `ConversationMemory`, max 10 turns). All services are instantiated once in `create_app()` and stored on `app.state`: `llm_client`, `vector_store`, `embedder`, `retriever`, `session_store`, `pipeline`, `agent`.
 
 ### Guardrails (`src/guardrails/filters.py`)
 
 `check_input()` enforces a 4096-char limit and blocks prompt-injection patterns. `check_output()` enforces an 8192-char limit and calls `redact_pii()`, which replaces SSNs, credit card numbers, emails, and phone numbers with `[REDACTED]`.
+
+### Logging
+
+Structured JSON logging via `structlog` with ISO timestamps. Use `structlog.get_logger()` — never `print` or `logging.getLogger`. Log entries include `request_id` (set by `RequestLoggingMiddleware`) for correlation. Log level is controlled by `LOG_LEVEL` env var (default `"info"`).
 
 ### Observability (`src/observability/telemetry.py`)
 
@@ -100,5 +106,5 @@ Integration tests require ChromaDB via `make docker-up`. Mark with `@pytest.mark
 - Business exceptions (`GuardrailViolation`, `LLMError`, `EmbeddingError`, `VectorStoreError`) are raised in domain/infra, caught in API routes: `EmbeddingError` → 502, `VectorStoreError` → 500, `LLMError` → 500, `GuardrailViolation` → 422.
 - Commit format: `<type>(<scope>): <description>`.
 - **ChromaDB collection dimension**: the `documents` collection is created on first ingest and its embedding dimension is fixed. If the embedding model changes or tests (mock 384-dim) run before production (1536-dim), delete the collection before re-ingesting: `curl -X DELETE http://localhost:8001/api/v2/tenants/default_tenant/databases/default_database/collections/documents`. The `_check_dimension()` guard now catches mismatches at ingest time with a clear error message.
-- **SSRF guard**: URL ingestion resolves the hostname via `socket.getaddrinfo()` and blocks private IP ranges (10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x, ::1, fc00::/7). Set `ALLOWED_URL_DOMAINS` to restrict which domains are allowed.
+- **SSRF guard**: URL ingestion resolves the hostname via `socket.getaddrinfo()` and blocks private IP ranges (10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x, ::1, fc00::/7). `ALLOWED_URL_DOMAINS` is a comma-separated string (e.g. `"example.com,docs.internal"`) — when non-empty, only hostnames ending with one of these values are permitted.
 - **Upload limit**: file uploads are limited to `MAX_UPLOAD_SIZE_MB` (default 50 MB). Exceeding returns HTTP 413.
