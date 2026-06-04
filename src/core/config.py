@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     allowed_origins: list[str] = ["*"]
     rate_limit_chat: str = "20/minute"
     rate_limit_ingest: str = "5/minute"
+    workers: int = 1
 
 
 settings = Settings()  # type: ignore[call-arg]  # fields come from env vars
