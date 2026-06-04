@@ -20,6 +20,7 @@ from src.api.routes import chat, documents, health
 from src.core.config import settings
 from src.core.ports import ISessionStore
 from src.infra.llm_client import LiteLLMClient
+from src.infra.postgres_session_store import PostgresSessionStore
 from src.infra.vector_store import ChromaVectorStore
 from src.rag.embedder import Embedder
 from src.rag.ingestion.pipeline import IngestPipeline
@@ -37,8 +38,6 @@ structlog.configure(
 
 def _build_session_store() -> ISessionStore:
     if settings.postgres_dsn:
-        from src.infra.postgres_session_store import PostgresSessionStore
-
         return PostgresSessionStore(settings.postgres_dsn)
     return InMemorySessionStore()
 
@@ -58,8 +57,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     logger.info("startup_complete", chroma_host=settings.chroma_host)
     yield
-
-    from src.infra.postgres_session_store import PostgresSessionStore
 
     if isinstance(session_store, PostgresSessionStore):
         await session_store.close()
