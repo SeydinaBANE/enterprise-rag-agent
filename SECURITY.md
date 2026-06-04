@@ -10,7 +10,7 @@
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Send a private report to: seriegalsen9@gmail.com
+Send a private report to: baneseydinamouhametgmail.com
 
 Include:
 - Description of the vulnerability
