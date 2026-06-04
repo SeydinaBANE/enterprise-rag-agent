@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Next.js 16 frontend (`frontend/`) — chat, gestion documents, paramètres, health status
+  - Zustand (config persistée localStorage + session in-memory), TanStack Query v5
+  - ApiKeyGuard, HealthBadge (polling 30 s), drag-and-drop FileUpload, SourcePanel
+  - Dockerfile multi-stage (node:20-alpine, output standalone)
+  - Grafana déplacé du port 3000 → 3001 (frontend prend le port 3000)
 - Initial project scaffold with Clean Architecture
 - LangGraph agent with RAG retrieval and tool use
 - Document ingestion pipeline (PDF, text, URL)

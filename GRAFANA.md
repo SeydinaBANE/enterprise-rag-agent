@@ -6,9 +6,11 @@ Dashboards de supervision de l'Enterprise RAG Agent.
 
 ## Accès
 
-- URL : http://localhost:3000
+- URL : http://localhost:3001
 - Identifiants par défaut : `admin` / `admin`
-- Dashboard principal : http://localhost:3000/d/rag-agent-v1
+- Dashboard principal : http://localhost:3001/d/rag-agent-v1
+
+> **Note** : Grafana est passé du port 3000 au port **3001** depuis l'ajout du frontend Next.js sur `:3000`.
 
 ---
 

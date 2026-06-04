@@ -58,6 +58,17 @@ make run               # uvicorn on http://localhost:8000 with --reload
 
 > `make docker-up` démarre aussi un container `app`. Si tu lances ensuite `make run`, il y a conflit sur le port 8000 — stoppe d'abord le container avec `docker compose stop app`.
 
+### Interface web (optionnel)
+
+```bash
+cd frontend
+cp .env.local.example .env.local   # une seule fois
+npm install                          # une seule fois
+npm run dev                          # http://localhost:3000
+```
+
+Saisir la clé API dans `/settings` au premier lancement (valeur de `API_KEY` dans `.env`).
+
 Stop the background services:
 
 ```bash
@@ -84,11 +95,12 @@ Port map:
 
 | Service | Port |
 |---|---|
+| Frontend (Next.js) | `http://localhost:3000` |
 | API | `http://localhost:8000` |
 | ChromaDB | `http://localhost:8001` |
 | Postgres | `localhost:5432` |
 | Prometheus | `http://localhost:9090` |
-| Grafana | `http://localhost:3000` (admin / admin) |
+| Grafana | `http://localhost:3001` (admin / admin) |
 
 > **Note**: in Compose mode `CHROMA_HOST=chromadb` and `POSTGRES_DSN` are injected automatically via the `environment` block — don't override them in `.env` unless you know what you're doing.
 
@@ -161,6 +173,10 @@ FastAPI's Swagger UI is available at `http://localhost:8000/docs` when the serve
 ### Conflit port 8000
 
 `make docker-up` démarre le container `app` sur le port 8000. `make run` échoue avec `Address already in use`. Fix : `docker compose stop app` avant `make run`.
+
+### Port 3000 — Frontend vs Grafana
+
+Grafana occupait le port 3000 avant l'ajout du frontend. Il est maintenant sur le port **3001** dans `docker-compose.yml`. Mettre à jour tout signet ou alerte pointant vers `localhost:3000`.
 
 ### ChromaDB — dimension des embeddings
 
