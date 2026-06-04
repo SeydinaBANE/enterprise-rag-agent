@@ -9,8 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 make install              # uv sync + pre-commit install
 
 # Development
-make run                  # FastAPI on localhost:8000 (hot reload)
-make docker-up            # ChromaDB + Prometheus + Grafana
+make run                  # FastAPI on localhost:8000 (hot reload) — stop app container first if running
+make docker-up            # ChromaDB + Postgres + Prometheus + Grafana (detached)
 make docker-down
 
 # Quality (all must pass before committing)
@@ -18,15 +18,16 @@ make lint                 # ruff check src/ tests/
 make format               # ruff format src/ tests/
 make typecheck            # mypy src/ (strict)
 make security             # bandit -r src/ -ll
-make test                 # pytest tests/unit/ (fast, no Docker)
-make test-integration     # pytest tests/integration/ (requires make docker-up first)
+make test                 # pytest tests/unit/ --cov-fail-under=80 (fast, no Docker)
+make test-integration     # pytest tests/integration/ -m integration (requires make docker-up first)
 make check                # lint + typecheck + security + test
 
 # Single test
 uv run pytest tests/unit/test_guardrails.py::test_check_input_valid -v
 
-# Docker image
-make docker-build         # enterprise-rag-agent:local
+# Docker
+make docker-build                    # builds enterprise-rag-agent:local (standalone image, not used by Compose)
+docker compose up -d --build app     # rebuild + restart the Compose app container
 ```
 
 Environment: copy `.env.example` → `.env`, set `OPENROUTER_API_KEY` and `API_KEY`.
@@ -66,7 +67,7 @@ Ingestion flow: `get_loader(source)` → `IDocumentLoader.load()` → `TextSplit
 2. `_rag_search()` — only if RAG; embeds query, retrieves chunks from vector store
 3. `_generate()` — LLM generates answer with conversation history + retrieved context
 
-Session memory lives in `SessionStore` (in-process dict of `ConversationMemory`, max 10 turns). All services are instantiated once in `create_app()` and stored on `app.state`.
+Session memory lives in `InMemorySessionStore` (in-process dict of `ConversationMemory`, max 10 turns). All services are instantiated once in `create_app()` and stored on `app.state`.
 
 ### Guardrails (`src/guardrails/filters.py`)
 
@@ -92,3 +93,4 @@ Integration tests require ChromaDB via `make docker-up`. Mark with `@pytest.mark
 - All config values come from `settings` (never hardcode or read env vars directly).
 - Business exceptions (`GuardrailViolation`, `LLMError`, etc.) are raised in domain/infra, caught and converted to HTTP errors in API routes.
 - Commit format: `<type>(<scope>): <description>` — enforced by commitlint pre-commit hook.
+- **ChromaDB collection dimension**: the `documents` collection is created on first ingest and its embedding dimension is fixed. If the embedding model changes or tests (mock 384-dim) run before production (1536-dim), delete the collection before re-ingesting: `curl -X DELETE http://localhost:8001/api/v2/tenants/default_tenant/databases/default_database/collections/documents`

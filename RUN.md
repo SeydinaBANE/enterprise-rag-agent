@@ -46,10 +46,13 @@ Optional fields (all have defaults):
 Runs the API with hot reload. ChromaDB must be available (start it via Docker or use the full stack below).
 
 ```bash
-make install      # uv sync + pre-commit install
-make docker-up    # starts ChromaDB, Postgres, Prometheus, Grafana
-make run          # uvicorn on http://localhost:8000 with --reload
+make install           # uv sync + pre-commit install
+make docker-up         # starts ChromaDB, Postgres, Prometheus, Grafana
+docker compose stop app  # stop the app container so port 8000 is free
+make run               # uvicorn on http://localhost:8000 with --reload
 ```
+
+> `make docker-up` démarre aussi un container `app`. Si tu lances ensuite `make run`, il y a conflit sur le port 8000 — stoppe d'abord le container avec `docker compose stop app`.
 
 Stop the background services:
 
@@ -64,13 +67,14 @@ make docker-down
 Runs everything (app + all services) as containers. The app image is built from `Dockerfile`.
 
 ```bash
-make docker-build                  # builds enterprise-rag-agent:local
+docker compose up -d               # detached, builds image automatically
+docker compose up -d --build app   # rebuild app image after code changes
 docker compose up                  # foreground, all services
-# or
-docker compose up -d               # detached
 docker compose logs -f app         # follow app logs
 docker compose down -v             # stop and remove volumes
 ```
+
+> `make docker-build` produit une image `enterprise-rag-agent:local` indépendante — elle n'est **pas** utilisée par Docker Compose. Pour rebuilder le container Compose après une modification du code, utilise `docker compose up -d --build app`.
 
 Port map:
 
@@ -148,7 +152,23 @@ FastAPI's Swagger UI is available at `http://localhost:8000/docs` when the serve
 
 ---
 
-## 6. Running tests
+## 6. Pitfalls connus
+
+### Conflit port 8000
+
+`make docker-up` démarre le container `app` sur le port 8000. `make run` échoue avec `Address already in use`. Fix : `docker compose stop app` avant `make run`.
+
+### ChromaDB — dimension des embeddings
+
+La collection `documents` est créée au premier ingest avec une dimension fixe. Si les tests d'intégration (mock 384-dim) ont tourné avant l'app réelle (`text-embedding-3-small` = 1536-dim), l'ingest échoue silencieusement avec "Storage error". Fix :
+
+```bash
+curl -X DELETE http://localhost:8001/api/v2/tenants/default_tenant/databases/default_database/collections/documents
+```
+
+---
+
+## 7. Running tests
 
 ```bash
 make test                  # unit tests only — no Docker required
