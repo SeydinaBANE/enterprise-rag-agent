@@ -5,6 +5,11 @@ import time
 from src.agent.tools import RAGSearchTool
 from src.core.models import AgentState, ChatMessage, ChatResponse, Source
 from src.core.ports import ILLMClient, ISessionStore
+from src.observability.telemetry import (
+    active_sessions,
+    llm_latency_seconds,
+    retrieval_latency_seconds,
+)
 
 ROUTE_PROMPT = """You are a routing assistant. Given a user question, decide if it needs
 document retrieval (RAG) or can be answered directly.
@@ -87,9 +92,17 @@ class AgentGraph:
         }
 
         state = await self._route(state)
+
         if state["used_retrieval"]:
+            t0 = time.monotonic()
             state = await self._rag_search(state)
+            retrieval_latency_seconds.observe(time.monotonic() - t0)
+
+        t0 = time.monotonic()
         state = await self._generate(state)
+        llm_latency_seconds.observe(time.monotonic() - t0)
+
+        active_sessions.set(await self._sessions.count())
 
         answer = state["messages"][-1].content
         sources = [
