@@ -7,7 +7,3 @@ scrape_configs:
     static_configs:
       - targets: ["app:8000"]
     metrics_path: /metrics
-
-  - job_name: "chromadb"
-    static_configs:
-      - targets: ["chromadb:8000"]
