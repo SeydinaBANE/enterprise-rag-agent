@@ -17,10 +17,10 @@ security:
 	uv run bandit -r src/ -ll
 
 test:
-	uv run pytest tests/unit/ -v
+	uv run pytest tests/unit/ -v --cov-fail-under=80
 
 test-integration:
-	uv run pytest tests/integration/ -v
+	uv run pytest tests/integration/ -v -m integration
 
 test-all:
 	uv run pytest tests/ -v

@@ -15,7 +15,7 @@ from tests.conftest import MockLLMClient
 def integration_client() -> TestClient:
     """Requires a real ChromaDB instance running on CHROMA_HOST:CHROMA_PORT."""
     from src.agent.graph import build_agent
-    from src.agent.memory import SessionStore
+    from src.agent.memory import InMemorySessionStore
     from src.agent.tools import RAGSearchTool
     from src.infra.vector_store import ChromaVectorStore
     from src.rag.embedder import Embedder
@@ -25,7 +25,7 @@ def integration_client() -> TestClient:
     vector_store = ChromaVectorStore()
     embedder = Embedder(mock_llm)
     rag_tool = RAGSearchTool(vector_store, embedder)
-    session_store = SessionStore()
+    session_store = InMemorySessionStore()
     pipeline = IngestPipeline(vector_store, embedder)
     agent = build_agent(mock_llm, rag_tool, session_store)
 
