@@ -1,4 +1,4 @@
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /app
 RUN pip install uv --no-cache-dir
@@ -6,7 +6,7 @@ RUN pip install uv --no-cache-dir
 COPY pyproject.toml ./
 RUN uv sync --no-dev
 
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 RUN useradd --create-home --shell /bin/bash appuser
 
