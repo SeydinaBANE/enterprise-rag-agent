@@ -53,13 +53,14 @@ docker run --env-file .env -p 8000:8000 enterprise-rag-agent:local
 
 ## Quality Gates
 
-All 4 must pass before any commit (enforced by pre-commit and CI):
+All 5 must pass before any commit (enforced by pre-commit and CI):
 
 ```bash
-make lint       # ruff — zero linting errors
-make typecheck  # mypy strict — zero type errors
-make security   # bandit — no HIGH/CRITICAL findings
-make test       # pytest — all green, coverage ≥ 80%
+make lint          # ruff — zero linting errors
+make format-check  # ruff format --check — no formatting drift
+make typecheck     # mypy strict — zero type errors
+make security      # bandit — no HIGH/CRITICAL findings
+make test          # pytest — all green, coverage ≥ 80%
 ```
 
 Shortcut to run all:
@@ -74,7 +75,7 @@ make check
 src/core/        Domain models, ports (interfaces), exceptions — zero ext deps
 src/infra/       ChromaDB and litellm infrastructure adapters
 src/rag/         Document ingestion, embedding, and retrieval pipeline
-src/agent/       LangGraph agent: tools, memory, state graph
+src/agent/       AgentGraph (plain class): tools, memory, invoke pipeline
 src/guardrails/  Input/output safety filters
 src/observability OpenTelemetry + Prometheus instrumentation
 src/api/         FastAPI application: routes, middleware, app factory

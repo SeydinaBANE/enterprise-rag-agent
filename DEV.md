@@ -61,13 +61,13 @@ uv run pytest tests/unit/ -v
 | API docs (Swagger) | http://localhost:8000/docs |
 | ReDoc | http://localhost:8000/redoc |
 | Prometheus metrics | http://localhost:8000/metrics |
-| Grafana | http://localhost:3000 (admin/admin) |
+| Grafana | http://localhost:3001 (admin/admin) |
 | Prometheus UI | http://localhost:9090 |
 
 ## Adding a New Agent Tool
 
-1. Define the function in `src/agent/tools.py` decorated with `@tool`
-2. Register it in the tool list in `src/agent/graph.py`
+1. Implement a tool class in `src/agent/tools.py` with a `run()` async method
+2. Inject it in `AgentGraph.__init__()` in `src/agent/graph.py` and call it in `_rag_search()`
 3. Add a unit test in `tests/unit/test_agent_graph.py`
 4. Document the new behavior in `CLI.md` if it changes the API contract
 

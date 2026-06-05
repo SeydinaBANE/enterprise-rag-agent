@@ -292,7 +292,6 @@ Toujours passer `match=` pour vérifier que c'est la bonne raison d'échec, pas 
 ### Test async
 
 ```python
-@pytest.mark.asyncio
 async def test_embedder_empty_input(mock_llm: MockLLMClient) -> None:
     embedder = Embedder(mock_llm)
     result = await embedder.embed([])
@@ -300,7 +299,7 @@ async def test_embedder_empty_input(mock_llm: MockLLMClient) -> None:
     mock_llm.embed.assert_not_called()
 ```
 
-`asyncio_mode = "auto"` est activé dans `pyproject.toml` — le marqueur `@pytest.mark.asyncio` est optionnel mais recommandé pour la clarté.
+`asyncio_mode = "auto"` est activé dans `pyproject.toml` — ne **pas** ajouter `@pytest.mark.asyncio` sur les tests async, cela provoque une erreur `duplicate-mark`.
 
 ---
 

@@ -8,7 +8,6 @@
 [![Python](https://img.shields.io/badge/python-3.12-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)](https://nextjs.org/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-1C3C3C?logo=langchain&logoColor=white)](https://langchain-ai.github.io/langgraph/)
 [![ChromaDB](https://img.shields.io/badge/ChromaDB-0.5+-FF6719?logoColor=white)](https://www.trychroma.com/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![codecov](https://codecov.io/gh/SeydinaBANE/enterprise-rag-agent/branch/main/graph/badge.svg)](https://codecov.io/gh/SeydinaBANE/enterprise-rag-agent)
@@ -27,7 +26,7 @@ Un agent RAG (Retrieval-Augmented Generation) autonome, prêt pour la production
         ↓ REST (X-API-Key)
    FastAPI REST API (localhost:8000)
         ↓
-  LangGraph Agent ──→ OpenRouter LLM ──→ Réponse citée
+  AgentGraph ──→ OpenRouter LLM ──→ Réponse citée
         ↓ retrieval
    ChromaDB (vecteurs) ← Documents (PDF, TXT, URL)
 ```
@@ -39,7 +38,7 @@ Un agent RAG (Retrieval-Augmented Generation) autonome, prêt pour la production
 | Fonctionnalité | Détail |
 |---|---|
 | **Interface web** | Next.js 16 — chat, gestion documents, paramètres, health status en temps réel |
-| **Agent autonome** | LangGraph — route automatiquement entre RAG et réponse directe |
+| **Agent autonome** | AgentGraph — route automatiquement entre RAG et réponse directe |
 | **Ingestion multi-format** | PDF, TXT, MD, RST, URLs web (BeautifulSoup) |
 | **Protection SSRF** | Résolution DNS + blocage IPs privées sur toute ingestion URL |
 | **Limite d'upload** | 50 Mo max par fichier (configurable) |
@@ -59,6 +58,7 @@ Un agent RAG (Retrieval-Augmented Generation) autonome, prêt pour la production
 ### Prérequis
 
 - Python 3.12+ avec [uv](https://docs.astral.sh/uv/)
+- Node.js 20+
 - Docker & Docker Compose
 - Clé API [OpenRouter](https://openrouter.ai)
 
@@ -147,10 +147,10 @@ src/
 ├── api/            # FastAPI routes, lifespan, global exception handler
 │   ├── routes/     # chat (rate-limited), documents, health + metrics
 │   └── middleware/ # API key auth, rate limiter (slowapi), request logging
-├── agent/          # LangGraph AgentGraph — route → rag_search → generate
+├── agent/          # AgentGraph (plain class) — route → rag_search → generate
 ├── core/           # Domain pur — ports (ABCs), models, exceptions, config
 ├── infra/          # Adaptateurs — LiteLLMClient, ChromaVectorStore, PostgresSessionStore
-├── rag/            # Pipeline d'ingestion — loader, splitter, embedder, retriever
+├── rag/            # Pipeline d'ingestion — ingestion/ (loader, splitter, pipeline), embedder, retriever
 ├── guardrails/     # Filtres input/output — injection, PII
 └── observability/  # Métriques Prometheus — singletons module-level
 ```
@@ -179,14 +179,14 @@ Le dashboard Grafana est provisionné automatiquement au démarrage avec :
 ## Qualité & Tests
 
 ```bash
-make check          # lint + typecheck + sécurité + tests (tout doit passer)
+make check          # lint + format-check + typecheck + sécurité + tests (tout doit passer)
 make test           # tests unitaires seuls — rapide, sans Docker
 make test-integration  # tests e2e — nécessite make docker-up
 ```
 
 - **80 %** de couverture requise sur les tests unitaires
 - Lint : `ruff`, Typage : `mypy --strict`, Sécurité : `bandit`
-- Pre-commit hooks : ruff, mypy, detect-private-key, commitlint
+- Pre-commit hooks : ruff, mypy, detect-private-key (commitlint non enforced — validation manuelle)
 
 ---
 
@@ -209,7 +209,7 @@ make test-integration  # tests e2e — nécessite make docker-up
 | `POSTGRES_DSN` | | _(in-memory)_ | DSN Postgres pour sessions persistantes |
 | `POSTGRES_POOL_MIN` | | `2` | Connexions min pool Postgres |
 | `POSTGRES_POOL_MAX` | | `10` | Connexions max pool Postgres |
-| `ALLOWED_URL_DOMAINS` | | `[]` | Domaines autorisés pour ingestion URL (vide = tous) |
+| `ALLOWED_URL_DOMAINS` | | `""` | Domaines autorisés pour ingestion URL, séparés par virgule (vide = tous) |
 | `TRUSTED_PROXIES` | | `0` | Nombre de reverse proxies de confiance |
 | `WORKERS` | | `1` | Workers uvicorn — mettre `4` en prod |
 | `MAX_CHUNK_SIZE` | | `512` | Taille max des chunks (tokens) |
@@ -222,13 +222,14 @@ make test-integration  # tests e2e — nécessite make docker-up
 | Fichier | Contenu |
 |---|---|
 | [CLAUDE.md](CLAUDE.md) | Guide architecture pour Claude Code |
+| [CLI.md](CLI.md) | Référence complète des endpoints REST et commandes make |
 | [RUN.md](RUN.md) | Runbook opérationnel complet |
+| [DEV.md](DEV.md) | Guide développeur — workflow, conventions, extensions |
 | [frontend/README.md](frontend/README.md) | Guide démarrage interface web |
-| [BONNES-PRATIQUES.md](BONNES-PRATIQUES.md) | Règles de contribution |
+| [BUILD.md](BUILD.md) | Build, dépendances et quality gates |
+| [DEPLOY.md](DEPLOY.md) | Déploiement et opérations |
 | [PROMETHEUS.md](PROMETHEUS.md) | Métriques et requêtes PromQL |
 | [GRAFANA.md](GRAFANA.md) | Dashboards et provisioning |
-| [BUILD.md](BUILD.md) | Build et gestion des dépendances |
-| [DEPLOY.md](DEPLOY.md) | Déploiement et opérations |
 | [docs/architecture.md](docs/architecture.md) | Diagrammes d'architecture |
 | [docs/adr/](docs/adr/) | Architecture Decision Records |
 
