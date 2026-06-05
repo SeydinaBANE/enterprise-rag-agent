@@ -41,6 +41,8 @@ Environment: copy `.env.example` → `.env`, set `OPENROUTER_API_KEY` and `API_K
 For the frontend, copy `frontend/.env.local.example` → `frontend/.env.local` (sets `NEXT_PUBLIC_API_URL`).
 Tests override env vars inline — no `.env` needed to run `make test`.
 
+**Docker port conflict**: `make docker-up` starts an app container on :8000. Always run `docker compose stop app` before `make run`, or the hot-reload server will fail to bind.
+
 ## Architecture
 
 **Clean Architecture in 4 layers** — dependencies only flow inward:
@@ -66,11 +68,11 @@ API (FastAPI) → Agent → Domain (core/) ← Infra (infra/)
 
 ### RAG pipeline (`src/rag/`)
 
-Ingestion flow: `get_loader(source)` → `IDocumentLoader.load()` → `TextSplitter.split()` → `Embedder.embed()` → `IVectorStore.add_chunks()`. `get_loader()` dispatches on source: URLs → `URLLoader` (httpx + BeautifulSoup), `.pdf` → `PDFLoader` (pypdf), `.txt/.md/.rst` → `TextLoader`. URLs go through an SSRF guard (`_validate_url()`) that blocks private IPs via DNS resolution and supports an optional domain allowlist (`ALLOWED_URL_DOMAINS`). httpx timeout is `Timeout(15.0, connect=5.0)`. Add new formats by implementing `IDocumentLoader` in `loader.py` and registering in `get_loader()`.
+Ingestion flow: `get_loader(source)` → `IDocumentLoader.load()` → `TextSplitter.split()` → `Embedder.embed()` → `IVectorStore.add_chunks()`. The ingestion components live in `src/rag/ingestion/` (`loader.py`, `splitter.py`, `pipeline.py`). `get_loader()` dispatches on source: URLs → `URLLoader` (httpx + BeautifulSoup), `.pdf` → `PDFLoader` (pypdf), `.txt/.md/.rst` → `TextLoader`. URLs go through an SSRF guard (`_validate_url()`) that blocks private IPs via DNS resolution and supports an optional domain allowlist (`ALLOWED_URL_DOMAINS`). httpx timeout is `Timeout(15.0, connect=5.0)`. Add new formats by implementing `IDocumentLoader` in `loader.py` and registering in `get_loader()`.
 
 ### Agent (`src/agent/`)
 
-`AgentGraph.invoke()` runs three async steps sequentially on an `AgentState` dict:
+`AgentGraph` (`graph.py`) is a **plain procedural class — not a LangGraph StateGraph** (LangGraph is a dependency but unused for orchestration). `AgentGraph.invoke()` runs three async steps sequentially on an `AgentState` dict:
 1. `_route()` — LLM classifies query as RAG or DIRECT
 2. `_rag_search()` — only if RAG; embeds query, retrieves chunks from vector store
 3. `_generate()` — LLM generates answer with conversation history + retrieved context
@@ -91,7 +93,7 @@ Prometheus metrics module-level singletons: `chat_requests_total` (Counter, labe
 
 ### API (`src/api/`)
 
-Routes access services via `request.app.state.<service>`. Auth is a FastAPI `Depends` on all data endpoints — never on `/health` or `/metrics`. Guardrail `check_input()` is called before agent invocation; `check_output()` redacts PII from the LLM response before returning.
+Routes access services via `request.app.state.<service>`. Auth (`X-API-Key` header) is a FastAPI `Depends` on all data endpoints — never on `/health` or `/metrics`. Guardrail `check_input()` is called before agent invocation; `check_output()` redacts PII from the LLM response before returning.
 
 **Lifespan** (`main.py`): on startup, checks ChromaDB and Postgres reachability before accepting traffic (fail-fast). On shutdown, closes the `PostgresSessionStore` connection pool cleanly.
 
@@ -115,7 +117,13 @@ Next.js 16 + React 19 app. **Next.js 16 has breaking API changes from earlier ve
 
 Stack: TypeScript (strict), Tailwind CSS v4, Zustand v5 (client state in `lib/store/`), React Query v5 (server state in hooks), Radix UI primitives (`components/ui/`).
 
-Custom hooks in `hooks/` (`useChat`, `useDocuments`, `useHealth`) own all API calls via the client in `lib/api/`. The API base URL is configured via `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:8000`). All routes require the `API_KEY` header — set it in `lib/api/` client configuration.
+**Pages**: root `/` redirects to `/chat` (main chat UI), `/documents` (ingest + list), `/settings` (API key + URL config). Routes are under `app/`.
+
+**Components**: `components/chat/` (ChatWindow, InputBar, MessageBubble, SourcePanel), `components/documents/` (DocumentTable, FileUpload, UrlIngest), `components/shared/` (ApiKeyGuard wraps pages that require auth; HealthBadge), `components/ui/` (Radix-based primitives).
+
+**State management**: two Zustand stores — `lib/store/config.ts` (`useConfigStore`, persisted to localStorage, holds `apiKey` + `apiUrl`) and `lib/store/session.ts` (`useSessionStore`, in-memory, holds `sessionId` + `messages`). `ApiKeyGuard` redirects to `/settings` when `apiKey` is empty.
+
+Custom hooks in `hooks/` (`useChat`, `useDocuments`, `useHealth`) own all API calls via `lib/api/client.ts`. The `apiFetch` helper reads `apiKey` and `apiUrl` from `useConfigStore.getState()` and sends `X-API-Key` on every request.
 
 ## Testing patterns
 
@@ -129,8 +137,8 @@ Integration tests require ChromaDB via `make docker-up`. Mark with `@pytest.mark
 
 - `src/core/` must remain free of external library imports.
 - All config values come from `settings` (never hardcode or read env vars directly).
-- Business exceptions (`GuardrailViolation`, `LLMError`, `EmbeddingError`, `VectorStoreError`) are raised in domain/infra, caught in API routes: `EmbeddingError` → 502, `VectorStoreError` → 500, `LLMError` → 500, `GuardrailViolation` → 422.
-- Commit format: `<type>(<scope>): <description>`.
+- Business exceptions are raised in domain/infra, caught in API routes: `EmbeddingError` → 502, `VectorStoreError` → 500, `LLMError` → 500, `GuardrailViolation` → 422, `UnsupportedSourceError` → 422.
+- Commit format: `<type>(<scope>): <description>`. `.commitlintrc.yml` exists but is **not** enforced by pre-commit — validation is manual.
 - **ChromaDB collection dimension**: the `documents` collection is created on first ingest and its embedding dimension is fixed. If the embedding model changes or tests (mock 384-dim) run before production (1536-dim), delete the collection before re-ingesting: `curl -X DELETE http://localhost:8001/api/v2/tenants/default_tenant/databases/default_database/collections/documents`. The `_check_dimension()` guard now catches mismatches at ingest time with a clear error message.
 - **SSRF guard**: URL ingestion resolves the hostname via `socket.getaddrinfo()` and blocks private IP ranges (10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x, ::1, fc00::/7). `ALLOWED_URL_DOMAINS` is a comma-separated string (e.g. `"example.com,docs.internal"`) — when non-empty, only hostnames ending with one of these values are permitted.
 - **Upload limit**: file uploads are limited to `MAX_UPLOAD_SIZE_MB` (default 50 MB). Exceeding returns HTTP 413.
