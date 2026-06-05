@@ -48,10 +48,10 @@ stateDiagram-v2
     route_node --> rag_search_node : needs_retrieval = true
     route_node --> generate_node : needs_retrieval = false
     rag_search_node --> generate_node
-    generate_node --> guardrails_node
-    guardrails_node --> [*] : ok
-    guardrails_node --> generate_node : retry (violation detected)
+    generate_node --> [*]
 ```
+
+Note: guardrails (`check_input` / `check_output`) are applied in the API route (`routes/chat.py`), not inside the agent graph.
 
 ## Data Flow — Chat Request
 
@@ -66,10 +66,10 @@ POST /chat
        ├─ route_node             → classify query (RAG needed?)
        ├─ rag_search_node        → embedder.embed(query) → retriever.search()
        │    └─ infra/vector_store.py (ChromaDB query)
-       ├─ generate_node          → litellm.acompletion(messages + context)
-       │    └─ infra/llm_client.py (OpenRouter)
-       └─ guardrails_node        → check output (PII in response)
+       └─ generate_node          → litellm.acompletion(messages + context)
+            └─ infra/llm_client.py (OpenRouter)
   │
+  ├─ guardrails/filters.py       → check_output (PII redaction on LLM answer)
   └─ ChatResponse (answer, sources, latency_ms)
 ```
 

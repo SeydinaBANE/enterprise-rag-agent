@@ -7,6 +7,7 @@
 [![CI](https://github.com/SeydinaBANE/enterprise-rag-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/SeydinaBANE/enterprise-rag-agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.12-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-1C3C3C?logo=langchain&logoColor=white)](https://langchain-ai.github.io/langgraph/)
 [![ChromaDB](https://img.shields.io/badge/ChromaDB-0.5+-FF6719?logoColor=white)](https://www.trychroma.com/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -22,13 +23,13 @@
 Un agent RAG (Retrieval-Augmented Generation) autonome, prêt pour la production. L'agent décide seul s'il doit chercher dans la base documentaire ou répondre directement, cite ses sources, et maintient un historique de conversation par session.
 
 ```
-Documents (PDF, TXT, URL)
-        ↓ ingestion
-   ChromaDB (vecteurs)
-        ↓ retrieval
+  Next.js UI (localhost:3000)
+        ↓ REST (X-API-Key)
+   FastAPI REST API (localhost:8000)
+        ↓
   LangGraph Agent ──→ OpenRouter LLM ──→ Réponse citée
-        ↑
-   FastAPI REST API
+        ↓ retrieval
+   ChromaDB (vecteurs) ← Documents (PDF, TXT, URL)
 ```
 
 ---
@@ -37,6 +38,7 @@ Documents (PDF, TXT, URL)
 
 | Fonctionnalité | Détail |
 |---|---|
+| **Interface web** | Next.js 16 — chat, gestion documents, paramètres, health status en temps réel |
 | **Agent autonome** | LangGraph — route automatiquement entre RAG et réponse directe |
 | **Ingestion multi-format** | PDF, TXT, MD, RST, URLs web (BeautifulSoup) |
 | **Protection SSRF** | Résolution DNS + blocage IPs privées sur toute ingestion URL |
@@ -72,13 +74,20 @@ make install
 cp .env.example .env
 # Renseigner OPENROUTER_API_KEY et API_KEY dans .env
 
-# 3. Démarrer les services (ChromaDB, Postgres, Prometheus, Grafana)
+# 3. Démarrer les services (ChromaDB, Postgres, Prometheus, frontend:3000, Grafana:3001)
 make docker-up
 
 # 4. Lancer l'API en mode développement (hot reload)
 docker compose stop app   # libérer le port 8000
 make run
 # → http://localhost:8000/docs
+
+# 5. Lancer l'interface web (dans un autre terminal)
+cd frontend
+cp .env.local.example .env.local
+npm install
+npm run dev
+# → http://localhost:3000
 ```
 
 ---
@@ -154,10 +163,11 @@ src/
 
 | Service | URL | Accès |
 |---|---|---|
+| Interface web | http://localhost:3000 | clé API |
 | API docs (Swagger) | http://localhost:8000/docs | public |
 | Métriques Prometheus | http://localhost:8000/metrics | public |
 | Prometheus UI | http://localhost:9090 | — |
-| Grafana | http://localhost:3000 | admin / admin |
+| Grafana | http://localhost:3001 | admin / admin |
 
 Le dashboard Grafana est provisionné automatiquement au démarrage avec :
 - Nombre de requêtes chat (total + taux par statut)
@@ -213,6 +223,7 @@ make test-integration  # tests e2e — nécessite make docker-up
 |---|---|
 | [CLAUDE.md](CLAUDE.md) | Guide architecture pour Claude Code |
 | [RUN.md](RUN.md) | Runbook opérationnel complet |
+| [frontend/README.md](frontend/README.md) | Guide démarrage interface web |
 | [BONNES-PRATIQUES.md](BONNES-PRATIQUES.md) | Règles de contribution |
 | [PROMETHEUS.md](PROMETHEUS.md) | Métriques et requêtes PromQL |
 | [GRAFANA.md](GRAFANA.md) | Dashboards et provisioning |

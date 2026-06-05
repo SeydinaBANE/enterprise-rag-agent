@@ -10,8 +10,13 @@ make install              # uv sync + pre-commit install
 
 # Development
 make run                  # FastAPI on localhost:8000 (hot reload) — stop app container first if running
-make docker-up            # ChromaDB + Postgres + Prometheus + Grafana (detached)
+make docker-up            # all services: ChromaDB:8001, Postgres:5432, Prometheus:9090, frontend:3000, Grafana:3001 (detached)
 make docker-down
+
+# Frontend (Next.js 16) — run from the frontend/ directory
+cd frontend && npm run dev    # dev server on localhost:3000
+cd frontend && npm run build  # production build
+cd frontend && npm run lint   # eslint
 
 # Quality (all must pass before committing)
 make lint                 # ruff check src/ tests/
@@ -20,7 +25,9 @@ make typecheck            # mypy src/ (strict)
 make security             # bandit -r src/ -ll
 make test                 # pytest tests/unit/ --cov-fail-under=80 (fast, no Docker)
 make test-integration     # pytest tests/integration/ -m integration (requires make docker-up first)
+make test-all             # unit + integration tests together
 make check                # lint + typecheck + security + test
+make pre-commit-run       # run all pre-commit hooks against all files
 
 # Single test
 uv run pytest tests/unit/test_guardrails.py::test_check_input_valid -v
@@ -31,6 +38,7 @@ docker compose up -d --build app     # rebuild + restart the Compose app contain
 ```
 
 Environment: copy `.env.example` → `.env`, set `OPENROUTER_API_KEY` and `API_KEY`.
+For the frontend, copy `frontend/.env.local.example` → `frontend/.env.local` (sets `NEXT_PUBLIC_API_URL`).
 Tests override env vars inline — no `.env` needed to run `make test`.
 
 ## Architecture
@@ -45,7 +53,7 @@ API (FastAPI) → Agent → Domain (core/) ← Infra (infra/)
 
 ### Domain layer (`src/core/`) — zero external dependencies
 
-- `config.py`: `Settings` (pydantic-settings). Instantiated as `settings` singleton at import time. All modules read from `settings`, never from `os.environ` directly. Key production fields: `allowed_origins` (list, default `["http://localhost:3000"]`), `rate_limit_chat` (default `"20/minute"`), `rate_limit_ingest` (default `"5/minute"`), `workers` (default `1`), `llm_timeout` (default `60`), `llm_max_retries` (default `2`), `max_upload_size_mb` (default `50`), `postgres_pool_min` (default `2`), `postgres_pool_max` (default `10`), `trusted_proxies` (default `0`), `allowed_url_domains` (default `[]`).
+- `config.py`: `Settings` (pydantic-settings). Instantiated as `settings` singleton at import time. All modules read from `settings`, never from `os.environ` directly. Key fields: `llm_model` (default `"openai/gpt-4o-mini"`), `embedding_model` (default `"openai/text-embedding-3-small"`), `retrieval_top_k` (default `5`), `max_chunk_size` (default `512`), `chunk_overlap` (default `50`), `allowed_origins` (list, default `["http://localhost:3000"]`), `rate_limit_chat` (default `"20/minute"`), `rate_limit_ingest` (default `"5/minute"`), `workers` (default `1`), `llm_timeout` (default `60`), `llm_max_retries` (default `2`), `max_upload_size_mb` (default `50`), `postgres_pool_min` (default `2`), `postgres_pool_max` (default `10`), `trusted_proxies` (default `0`), `allowed_url_domains` (default `""`, comma-separated string of allowed hostnames).
 - `ports.py`: Four ABCs — `ILLMClient`, `IVectorStore`, `IDocumentLoader`, `ISessionStore`. The entire codebase depends on these, never on concrete implementations.
 - `models.py`: All Pydantic models. `AgentState` is a `TypedDict` (mutable dict passed through agent steps).
 - `exceptions.py`: `GuardrailViolation`, `LLMError`, `EmbeddingError`, `VectorStoreError`, `DocumentNotFoundError`, `UnsupportedSourceError` — raised in domain/infra, caught in API routes.
@@ -67,11 +75,15 @@ Ingestion flow: `get_loader(source)` → `IDocumentLoader.load()` → `TextSplit
 2. `_rag_search()` — only if RAG; embeds query, retrieves chunks from vector store
 3. `_generate()` — LLM generates answer with conversation history + retrieved context
 
-Session memory lives in `InMemorySessionStore` (in-process dict of `ConversationMemory`, max 10 turns). All services are instantiated once in `create_app()` and stored on `app.state`.
+Session memory lives in `InMemorySessionStore` (in-process dict of `ConversationMemory`, max 10 turns). All services are instantiated once in `create_app()` and stored on `app.state`: `llm_client`, `vector_store`, `embedder`, `retriever`, `session_store`, `pipeline`, `agent`.
 
 ### Guardrails (`src/guardrails/filters.py`)
 
 `check_input()` enforces a 4096-char limit and blocks prompt-injection patterns. `check_output()` enforces an 8192-char limit and calls `redact_pii()`, which replaces SSNs, credit card numbers, emails, and phone numbers with `[REDACTED]`.
+
+### Logging
+
+Structured JSON logging via `structlog` with ISO timestamps. Use `structlog.get_logger()` — never `print` or `logging.getLogger`. Log entries include `request_id` (set by `RequestLoggingMiddleware`) for correlation. Log level is controlled by `LOG_LEVEL` env var (default `"info"`).
 
 ### Observability (`src/observability/telemetry.py`)
 
@@ -87,9 +99,29 @@ Routes access services via `request.app.state.<service>`. Auth is a FastAPI `Dep
 
 **Global exception handler**: unhandled exceptions return `{"detail": "Internal server error", "request_id": "<uuid>"}` (JSON 500) instead of the default HTML Starlette error page. The `request_id` is set by `RequestLoggingMiddleware` on `request.state.request_id`.
 
+**API endpoints**:
+| Method | Path | Auth | Notes |
+|--------|------|------|-------|
+| POST | `/chat` | API key | rate-limited 20/min |
+| POST | `/documents/ingest` | API key | multipart file upload, rate-limited 5/min |
+| POST | `/documents/ingest/url` | API key | JSON `{url}`, rate-limited 5/min |
+| GET | `/documents` | API key | |
+| GET | `/health` | none | ChromaDB + Postgres reachability |
+| GET | `/metrics` | none | Prometheus scrape target |
+
+### Frontend (`frontend/`)
+
+Next.js 16 + React 19 app. **Next.js 16 has breaking API changes from earlier versions** — before writing any Next.js-specific code, read the relevant guide in `node_modules/next/dist/docs/` and heed deprecation notices. Do not rely on pre-16 conventions.
+
+Stack: TypeScript (strict), Tailwind CSS v4, Zustand v5 (client state in `lib/store/`), React Query v5 (server state in hooks), Radix UI primitives (`components/ui/`).
+
+Custom hooks in `hooks/` (`useChat`, `useDocuments`, `useHealth`) own all API calls via the client in `lib/api/`. The API base URL is configured via `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:8000`). All routes require the `API_KEY` header — set it in `lib/api/` client configuration.
+
 ## Testing patterns
 
 Unit tests mock at the interface boundary using `MockLLMClient`, `MockVectorStore`, and `MockSessionStore` from `tests/conftest.py` — these are plain classes with `AsyncMock` attributes (not ABC subclasses). Set `side_effect` on `mock_llm.complete` when a test calls it multiple times (e.g., route call then generate call). Default embed return is `[[0.1] * 384]`.
+
+`asyncio_mode = "auto"` is set in `pyproject.toml` — do **not** add `@pytest.mark.asyncio` to async tests; it causes a duplicate-mark error.
 
 Integration tests require ChromaDB via `make docker-up`. Mark with `@pytest.mark.integration` and import infra adapters inside the fixture, not at module level.
 
@@ -100,5 +132,5 @@ Integration tests require ChromaDB via `make docker-up`. Mark with `@pytest.mark
 - Business exceptions (`GuardrailViolation`, `LLMError`, `EmbeddingError`, `VectorStoreError`) are raised in domain/infra, caught in API routes: `EmbeddingError` → 502, `VectorStoreError` → 500, `LLMError` → 500, `GuardrailViolation` → 422.
 - Commit format: `<type>(<scope>): <description>`.
 - **ChromaDB collection dimension**: the `documents` collection is created on first ingest and its embedding dimension is fixed. If the embedding model changes or tests (mock 384-dim) run before production (1536-dim), delete the collection before re-ingesting: `curl -X DELETE http://localhost:8001/api/v2/tenants/default_tenant/databases/default_database/collections/documents`. The `_check_dimension()` guard now catches mismatches at ingest time with a clear error message.
-- **SSRF guard**: URL ingestion resolves the hostname via `socket.getaddrinfo()` and blocks private IP ranges (10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x, ::1, fc00::/7). Set `ALLOWED_URL_DOMAINS` to restrict which domains are allowed.
+- **SSRF guard**: URL ingestion resolves the hostname via `socket.getaddrinfo()` and blocks private IP ranges (10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x, ::1, fc00::/7). `ALLOWED_URL_DOMAINS` is a comma-separated string (e.g. `"example.com,docs.internal"`) — when non-empty, only hostnames ending with one of these values are permitted.
 - **Upload limit**: file uploads are limited to `MAX_UPLOAD_SIZE_MB` (default 50 MB). Exceeding returns HTTP 413.
