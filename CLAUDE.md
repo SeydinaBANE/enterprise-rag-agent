@@ -13,20 +13,23 @@ make run                  # FastAPI on localhost:8000 (hot reload) — stop app 
 make docker-up            # all services: ChromaDB:8001, Postgres:5432, Prometheus:9090, frontend:3000, Grafana:3001 (detached)
 make docker-down
 
-# Frontend (Next.js 16) — run from the frontend/ directory
-cd frontend && npm run dev    # dev server on localhost:3000
-cd frontend && npm run build  # production build
-cd frontend && npm run lint   # eslint
+# Frontend (Next.js 16)
+make frontend-install     # npm ci
+make frontend-dev         # dev server on localhost:3000
+make frontend-build       # production build
+make frontend-lint        # eslint
+make frontend-typecheck   # tsc --noEmit
 
 # Quality (all must pass before committing)
 make lint                 # ruff check src/ tests/
 make format               # ruff format src/ tests/
+make format-check         # ruff format --check (non-destructive, used by make check)
 make typecheck            # mypy src/ (strict)
 make security             # bandit -r src/ -ll
 make test                 # pytest tests/unit/ --cov-fail-under=80 (fast, no Docker)
-make test-integration     # pytest tests/integration/ -m integration (requires make docker-up first)
+make test-integration     # pytest tests/integration/ -m integration (requires Docker)
 make test-all             # unit + integration tests together
-make check                # lint + typecheck + security + test
+make check                # lint + format-check + typecheck + security + test
 make pre-commit-run       # run all pre-commit hooks against all files
 
 # Single test
@@ -74,8 +77,10 @@ Ingestion flow: `get_loader(source)` → `IDocumentLoader.load()` → `TextSplit
 
 `AgentGraph` (`graph.py`) is a **plain procedural class — not a LangGraph StateGraph** (LangGraph is a dependency but unused for orchestration). `AgentGraph.invoke()` runs three async steps sequentially on an `AgentState` dict:
 1. `_route()` — LLM classifies query as RAG or DIRECT
-2. `_rag_search()` — only if RAG; embeds query, retrieves chunks from vector store
+2. `_rag_search()` — only if RAG; delegates to `RAGSearchTool` (`tools.py`), which embeds the query and calls `IVectorStore.search()`
 3. `_generate()` — LLM generates answer with conversation history + retrieved context
+
+**`RAGSearchTool` vs `Retriever`**: both wrap `IVectorStore` + `Embedder`, but serve different callers. `RAGSearchTool` (in `src/agent/tools.py`) is the agent's search interface and returns a `SearchResult` with formatted text. `Retriever` (in `src/rag/retriever.py`) is used by API route handlers for document lookup and returns raw `Chunk` lists.
 
 Session memory lives in `InMemorySessionStore` (in-process dict of `ConversationMemory`, max 10 turns). All services are instantiated once in `create_app()` and stored on `app.state`: `llm_client`, `vector_store`, `embedder`, `retriever`, `session_store`, `pipeline`, `agent`.
 
@@ -131,7 +136,7 @@ Unit tests mock at the interface boundary using `MockLLMClient`, `MockVectorStor
 
 `asyncio_mode = "auto"` is set in `pyproject.toml` — do **not** add `@pytest.mark.asyncio` to async tests; it causes a duplicate-mark error.
 
-Integration tests require ChromaDB via `make docker-up`. Mark with `@pytest.mark.integration` and import infra adapters inside the fixture, not at module level.
+Integration tests only require ChromaDB. `docker-compose.test.yml` starts just ChromaDB (lighter than `make docker-up`) — run `docker compose -f docker-compose.test.yml up -d` before `make test-integration`. Mark integration tests with `@pytest.mark.integration` and import infra adapters inside the fixture, not at module level.
 
 ## Key constraints
 
