@@ -19,8 +19,8 @@ Each layer depends only on layers below it; the domain layer (`core/`) has zero 
 └───────────────────────────┬──────────────────────────────────┘
                             │ calls
 ┌───────────────────────────▼──────────────────────────────────┐
-│              Agent Layer (LangGraph)                         │
-│  graph.py (StateGraph)  tools.py  memory.py                  │
+│              Agent Layer                                     │
+│  graph.py (AgentGraph)  tools.py  memory.py                  │
 └──────────┬───────────────────────────────┬───────────────────┘
            │ retrieval                     │ generation
 ┌──────────▼──────────┐        ┌──────────▼──────────────────┐

@@ -9,11 +9,19 @@ make docker-up            # chromadb + postgres + prometheus + grafana (detached
 make docker-down
 make lint                 # ruff check src/ tests/
 make format               # ruff format src/ tests/
+make format-check         # ruff format --check (read-only, used in CI and make check)
 make typecheck            # mypy src/ (strict)
 make security             # bandit -r src/ -ll
 make test                 # pytest tests/unit/ -v --cov-fail-under=80 (fast, no Docker)
 make test-integration     # pytest tests/integration/ -m integration (requires `make docker-up`)
-make check                # lint + typecheck + security + test (must all pass before commit)
+make check                # lint + format-check + typecheck + security + test (must all pass before commit)
+
+# Frontend
+make frontend-install     # cd frontend && npm ci
+make frontend-dev         # cd frontend && npm run dev (localhost:3000)
+make frontend-build       # cd frontend && npm run build
+make frontend-lint        # cd frontend && npm run lint
+make frontend-typecheck   # cd frontend && npx tsc --noEmit
 
 # Single test
 uv run pytest tests/unit/test_guardrails.py::test_check_input_valid -v

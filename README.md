@@ -27,7 +27,7 @@ Un agent RAG (Retrieval-Augmented Generation) autonome, prêt pour la production
         ↓ REST (X-API-Key)
    FastAPI REST API (localhost:8000)
         ↓
-  LangGraph Agent ──→ OpenRouter LLM ──→ Réponse citée
+  AgentGraph ──→ OpenRouter LLM ──→ Réponse citée
         ↓ retrieval
    ChromaDB (vecteurs) ← Documents (PDF, TXT, URL)
 ```
@@ -39,7 +39,7 @@ Un agent RAG (Retrieval-Augmented Generation) autonome, prêt pour la production
 | Fonctionnalité | Détail |
 |---|---|
 | **Interface web** | Next.js 16 — chat, gestion documents, paramètres, health status en temps réel |
-| **Agent autonome** | LangGraph — route automatiquement entre RAG et réponse directe |
+| **Agent autonome** | AgentGraph — route automatiquement entre RAG et réponse directe |
 | **Ingestion multi-format** | PDF, TXT, MD, RST, URLs web (BeautifulSoup) |
 | **Protection SSRF** | Résolution DNS + blocage IPs privées sur toute ingestion URL |
 | **Limite d'upload** | 50 Mo max par fichier (configurable) |
@@ -147,7 +147,7 @@ src/
 ├── api/            # FastAPI routes, lifespan, global exception handler
 │   ├── routes/     # chat (rate-limited), documents, health + metrics
 │   └── middleware/ # API key auth, rate limiter (slowapi), request logging
-├── agent/          # LangGraph AgentGraph — route → rag_search → generate
+├── agent/          # AgentGraph (plain class) — route → rag_search → generate
 ├── core/           # Domain pur — ports (ABCs), models, exceptions, config
 ├── infra/          # Adaptateurs — LiteLLMClient, ChromaVectorStore, PostgresSessionStore
 ├── rag/            # Pipeline d'ingestion — loader, splitter, embedder, retriever
@@ -186,7 +186,7 @@ make test-integration  # tests e2e — nécessite make docker-up
 
 - **80 %** de couverture requise sur les tests unitaires
 - Lint : `ruff`, Typage : `mypy --strict`, Sécurité : `bandit`
-- Pre-commit hooks : ruff, mypy, detect-private-key, commitlint
+- Pre-commit hooks : ruff, mypy, detect-private-key (commitlint non enforced — validation manuelle)
 
 ---
 
