@@ -37,5 +37,7 @@ class Settings(BaseSettings):
 
     allowed_url_domains: str = ""
 
+    app_env: str = "development"
+
 
 settings = Settings()  # type: ignore[call-arg]  # pydantic-settings injecte les champs depuis les env vars

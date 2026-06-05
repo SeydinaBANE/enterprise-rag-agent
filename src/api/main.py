@@ -68,11 +68,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
+    _is_prod = settings.app_env == "production"
     app = FastAPI(
         title="Enterprise RAG Agent",
         description="Production-grade agentic RAG system for enterprise knowledge management",
         version="0.1.0",
         lifespan=_lifespan,
+        docs_url=None if _is_prod else "/docs",
+        redoc_url=None if _is_prod else "/redoc",
+        openapi_url=None if _is_prod else "/openapi.json",
     )
 
     app.state.limiter = limiter
@@ -97,8 +101,9 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.allowed_origins,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type", "X-API-Key"],
+        allow_credentials=False,
     )
     app.add_middleware(RequestLoggingMiddleware)
 
