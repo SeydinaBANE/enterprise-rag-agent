@@ -43,6 +43,7 @@ docker compose up -d --build app     # rebuild + restart the Compose app contain
 Environment: copy `.env.example` → `.env`, set `OPENROUTER_API_KEY` and `API_KEY`.
 For the frontend, copy `frontend/.env.local.example` → `frontend/.env.local` (sets `NEXT_PUBLIC_API_URL`).
 Tests override env vars inline — no `.env` needed to run `make test`.
+Python 3.12 required (`requires-python = ">=3.12"`). Line length is **100** chars (ruff); formatters will reject lines over this.
 
 **Docker port conflict**: `make docker-up` starts an app container on :8000. Always run `docker compose stop app` before `make run`, or the hot-reload server will fail to bind.
 
@@ -128,7 +129,7 @@ Stack: TypeScript (strict), Tailwind CSS v4, Zustand v5 (client state in `lib/st
 
 **State management**: two Zustand stores — `lib/store/config.ts` (`useConfigStore`, persisted to localStorage, holds `apiKey` + `apiUrl`) and `lib/store/session.ts` (`useSessionStore`, in-memory, holds `sessionId` + `messages`). `ApiKeyGuard` redirects to `/settings` when `apiKey` is empty.
 
-Custom hooks in `hooks/` (`useChat`, `useDocuments`, `useHealth`) own all API calls via `lib/api/client.ts`. The `apiFetch` helper reads `apiKey` and `apiUrl` from `useConfigStore.getState()` and sends `X-API-Key` on every request.
+Custom hooks in `hooks/` (`useChat`, `useDocuments`, `useHealth`) own all API calls via domain-specific modules: `lib/api/chat.ts` (exports `postChat`) and `lib/api/documents.ts`. Both delegate to `apiFetch` in `lib/api/client.ts`, which reads `apiKey` and `apiUrl` from `useConfigStore.getState()` and sends `X-API-Key` on every request. `ApiError` (with `.status`) is the typed error class thrown on non-2xx responses.
 
 ## Testing patterns
 
@@ -137,6 +138,13 @@ Unit tests mock at the interface boundary using `MockLLMClient`, `MockVectorStor
 `asyncio_mode = "auto"` is set in `pyproject.toml` — do **not** add `@pytest.mark.asyncio` to async tests; it causes a duplicate-mark error.
 
 Integration tests only require ChromaDB. `docker-compose.test.yml` starts just ChromaDB (lighter than `make docker-up`) — run `docker compose -f docker-compose.test.yml up -d` before `make test-integration`. Mark integration tests with `@pytest.mark.integration` and import infra adapters inside the fixture, not at module level.
+
+## Architectural decisions
+
+`docs/adr/` has three decision records worth reading when their rationale matters:
+- `001-langgraph.md` — LangGraph `StateGraph` was the intended approach; the implementation diverged to a plain class. LangGraph remains a declared dependency.
+- `002-chromadb.md` — why ChromaDB over pgvector or Pinecone.
+- `003-openrouter-litellm.md` — why OpenRouter via LiteLLM instead of direct provider SDKs.
 
 ## Key constraints
 

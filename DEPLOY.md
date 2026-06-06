@@ -67,6 +67,67 @@ docker stop rag-agent && docker rm rag-agent
 docker run -d --name rag-agent ... ghcr.io/<user>/enterprise-rag-agent:sha-<previous-sha>
 ```
 
+## Render + Vercel (Cloud)
+
+### Architecture
+
+```
+Vercel (frontend, Next.js)
+  └─► Render Web Service — rag-api (FastAPI, Docker)
+          ├─► Render Private Service — chromadb (persistent disk)
+          └─► Render Managed PostgreSQL — rag-postgres
+```
+
+Prometheus/Grafana are local-only — use Render's built-in metrics dashboard in production.
+
+### First deploy — Render
+
+1. Push this repo to GitHub.
+2. On [render.com](https://render.com) → **New** → **Blueprint** → select this repo.
+   Render reads `render.yaml` and creates all three services automatically.
+3. After the first deploy, set the two secrets in the **rag-api** service environment:
+   | Key | Value |
+   |-----|-------|
+   | `OPENROUTER_API_KEY` | your OpenRouter key |
+   | `API_KEY` | a strong random secret |
+   | `ALLOWED_ORIGINS` | your Vercel URL (e.g. `["https://your-app.vercel.app"]`) |
+4. **Trigger a redeploy** of `rag-api` after setting the secrets.
+
+Note on ChromaDB: the first request after a cold start will be slow while the private service initialises. The persistent disk at `/chroma/chroma` survives deploys.
+
+### First deploy — Vercel
+
+1. On [vercel.com](https://vercel.com) → **New Project** → import this repo.
+   Vercel reads `vercel.json` → `rootDirectory: frontend` and auto-detects Next.js.
+2. Set the environment variable:
+   | Key | Value |
+   |-----|-------|
+   | `NEXT_PUBLIC_API_URL` | your Render service URL (e.g. `https://rag-api.onrender.com`) |
+3. Deploy.
+
+### Continuous deployment
+
+Both platforms redeploy automatically on push to `main` once connected to the repo.
+
+### Costs (approximate)
+
+| Service | Plan | $/month |
+|---------|------|---------|
+| Render Web Service (rag-api) | Starter | $7 |
+| Render Private Service (chromadb) | Starter | $7 |
+| Render Managed PostgreSQL | Free | $0 |
+| Render Persistent Disk (10 GB) | — | $2.50 |
+| Vercel (frontend) | Hobby | $0 |
+| **Total** | | **~$16.50** |
+
+### Troubleshooting
+
+**`CHROMA_HOST` unreachable** — the `chromadb` private service takes ~2 min to start on first deploy. Check its logs in the Render dashboard; the `rag-api` lifespan check will retry.
+
+**`POSTGRES_DSN` format** — Render's `internalConnectionString` uses `postgresql://` which psycopg3 requires. If you manually set `POSTGRES_DSN`, use `postgresql://` not `postgres://`.
+
+**Rate limiting off** — `TRUSTED_PROXIES=1` is set in `render.yaml` so `X-Forwarded-For` from Render's proxy is trusted for accurate IP detection.
+
 ## Health Check
 
 ```bash

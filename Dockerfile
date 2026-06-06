@@ -3,8 +3,8 @@ FROM python:3.14-slim AS builder
 WORKDIR /app
 RUN pip install uv --no-cache-dir
 
-COPY pyproject.toml ./
-RUN uv sync --no-dev
+COPY pyproject.toml uv.lock ./
+RUN uv sync --no-dev --frozen
 
 FROM python:3.14-slim AS runtime
 

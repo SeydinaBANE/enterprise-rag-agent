@@ -1,0 +1,60 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Deploy: connect this repo on render.com → "New Blueprint"
+# Set sync:false env vars manually in the Render dashboard after first deploy.
+
+services:
+  # ── FastAPI backend ────────────────────────────────────────────────────────
+  - type: web
+    name: rag-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false                       # set manually in dashboard
+      - key: API_KEY
+        sync: false                       # set manually in dashboard
+      - key: ALLOWED_ORIGINS
+        sync: false                       # set to your Vercel URL, e.g. https://your-app.vercel.app
+      - key: CHROMA_HOST
+        value: chromadb                   # Render internal hostname = service name
+      - key: CHROMA_PORT
+        value: "8000"
+      - key: POSTGRES_DSN
+        fromDatabase:
+          name: rag-postgres
+          property: internalConnectionString
+      - key: TRUSTED_PROXIES
+        value: "1"                        # Render sits behind one proxy hop
+      - key: WORKERS
+        value: "1"                        # increase to 2-4 on higher-tier plans
+      - key: LOG_LEVEL
+        value: info
+
+  # ── ChromaDB private service (no public URL) ───────────────────────────────
+  - type: pserv
+    name: chromadb
+    runtime: image
+    image:
+      url: docker.io/chromadb/chroma:latest
+    plan: starter
+    disk:
+      name: chroma-data
+      mountPath: /chroma/chroma
+      sizeGB: 10
+    envVars:
+      - key: IS_PERSISTENT
+        value: "TRUE"
+      - key: ANONYMIZED_TELEMETRY
+        value: "FALSE"
+      - key: CHROMA_SERVER_HTTP_PORT
+        value: "8000"
+
+# ── Managed PostgreSQL ─────────────────────────────────────────────────────
+databases:
+  - name: rag-postgres
+    databaseName: rag
+    user: rag
+    plan: free
