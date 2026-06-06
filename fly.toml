@@ -1,0 +1,39 @@
+# Fly.io config — https://fly.io/docs/reference/configuration/
+# Deploy: fly launch --no-deploy, then fly secrets set ..., then fly deploy
+app = 'enterprise-rag-agent'
+primary_region = 'cdg'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  CHROMA_MODE = 'embedded'
+  CHROMA_DATA_PATH = '/data/chroma'
+  APP_ENV = 'production'
+  LOG_LEVEL = 'info'
+  TRUSTED_PROXIES = '1'
+  WORKERS = '1'
+
+# Persistent volume for ChromaDB data (survives deploys)
+[[mounts]]
+  source = 'chroma_data'
+  destination = '/data/chroma'
+  initial_size = '3gb'
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = '30s'
+    interval = '15s'
+    method = 'GET'
+    path = '/health'
+    timeout = '5s'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'

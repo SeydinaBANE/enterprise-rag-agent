@@ -18,16 +18,19 @@ COLLECTION_NAME = "documents"
 
 class ChromaVectorStore(IVectorStore):
     def __init__(self) -> None:
-        self._host = settings.chroma_host
-        self._port = settings.chroma_port
         self._client: AsyncClientAPI | None = None
 
     async def _get_client(self) -> AsyncClientAPI:
         if self._client is None:
-            self._client = await chromadb.AsyncHttpClient(
-                host=self._host,
-                port=self._port,
-            )
+            if settings.chroma_mode == "embedded":
+                self._client = await chromadb.AsyncPersistentClient(  # type: ignore[attr-defined]  # stubs lag runtime API
+                    path=settings.chroma_data_path
+                )
+            else:
+                self._client = await chromadb.AsyncHttpClient(
+                    host=settings.chroma_host,
+                    port=settings.chroma_port,
+                )
         return self._client
 
     async def _get_collection(self) -> AsyncCollection:

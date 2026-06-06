@@ -67,6 +67,87 @@ docker stop rag-agent && docker rm rag-agent
 docker run -d --name rag-agent ... ghcr.io/<user>/enterprise-rag-agent:sha-<previous-sha>
 ```
 
+## Fly.io + Supabase + Vercel (gratuit)
+
+### Architecture
+
+```
+Vercel (frontend, Next.js) — gratuit
+  └─► Fly.io Web Service — rag-api (FastAPI, CHROMA_MODE=embedded)
+          ├─► Fly Volume 3 GB — /data/chroma (ChromaDB embarqué)
+          └─► Supabase PostgreSQL — sessions (gratuit)
+```
+
+ChromaDB tourne **en mode embarqué** (in-process) : plus de service séparé, les données sont persistées sur un volume Fly.
+
+### Coûts
+
+| Service | Plan | $/mois |
+|---------|------|--------|
+| Fly.io (shared-cpu-1x 512 MB) | Pay-as-you-go | ~$2–3 (auto-stop) |
+| Fly Volume 3 GB | Inclus free tier | $0 |
+| Supabase PostgreSQL | Free | $0 |
+| Vercel (frontend) | Hobby | $0 |
+| **Total** | | **~$2–3** |
+
+> Avec `auto_stop_machines = 'stop'` dans `fly.toml`, la VM s'arrête si inactif — coût quasi nul en dehors des requêtes.
+
+### Prérequis
+
+```bash
+# Installer flyctl
+curl -L https://fly.io/install.sh | sh
+fly auth login
+```
+
+### First deploy — Supabase
+
+1. Créer un projet sur [supabase.com](https://supabase.com) (Free tier).
+2. Récupérer la **Connection string** (mode Transaction, port 5432) dans Settings → Database.
+3. La noter — elle sera passée comme secret Fly : `postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres`.
+
+### First deploy — Fly.io
+
+```bash
+# 1. Créer l'app (ne pas déployer encore)
+fly launch --no-deploy --name enterprise-rag-agent
+
+# 2. Créer le volume persistant pour ChromaDB
+fly volumes create chroma_data --region cdg --size 3
+
+# 3. Injecter les secrets (jamais dans fly.toml)
+fly secrets set \
+  OPENROUTER_API_KEY=sk-... \
+  API_KEY=votre-secret \
+  POSTGRES_DSN="postgresql://postgres:...@db....supabase.co:5432/postgres" \
+  ALLOWED_ORIGINS='["https://votre-app.vercel.app"]'
+
+# 4. Déployer
+fly deploy
+```
+
+### First deploy — Vercel
+
+Identique à la section Render + Vercel ci-dessous, en remplaçant `NEXT_PUBLIC_API_URL` par l'URL Fly : `https://enterprise-rag-agent.fly.dev`.
+
+### Redéploiement
+
+```bash
+fly deploy          # rebuild + redeploy
+fly logs            # logs en temps réel
+fly status          # état des machines
+```
+
+### Troubleshooting
+
+**OOM / machine killed** — passer à 1 GB : modifier `memory = '1gb'` dans `fly.toml` (~$3.50/mois).
+
+**Volume déjà monté** — si `fly volumes create` échoue car la machine est déjà créée : `fly volumes list` pour vérifier.
+
+**Cold start lent** — normal avec `auto_stop = 'stop'` ; la première requête après inactivité réveille la VM (~3–5 s).
+
+---
+
 ## Render + Vercel (Cloud)
 
 ### Architecture

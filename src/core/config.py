@@ -13,6 +13,8 @@ class Settings(BaseSettings):
 
     chroma_host: str = "localhost"
     chroma_port: int = 8001
+    chroma_mode: str = "http"
+    chroma_data_path: str = "/data/chroma"
 
     llm_model: str = "openai/gpt-4o-mini"
     embedding_model: str = "openai/text-embedding-3-small"

@@ -52,6 +52,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     session_store: ISessionStore = app.state.session_store
 
     if not await vector_store.is_healthy():
+        if settings.chroma_mode == "embedded":
+            raise RuntimeError(
+                f"ChromaDB embedded client failed to initialise at {settings.chroma_data_path}"
+            )
         raise RuntimeError(
             f"ChromaDB is not reachable at {settings.chroma_host}:{settings.chroma_port}"
         )
@@ -59,7 +63,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.postgres_dsn and not await session_store.is_healthy():
         raise RuntimeError("Postgres session store is not reachable at startup")
 
-    logger.info("startup_complete", chroma_host=settings.chroma_host)
+    logger.info("startup_complete", chroma_mode=settings.chroma_mode)
     yield
 
     if isinstance(session_store, PostgresSessionStore):
