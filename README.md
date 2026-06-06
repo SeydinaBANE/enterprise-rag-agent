@@ -198,8 +198,10 @@ make test-integration  # tests e2e — nécessite make docker-up
 | `API_KEY` | ✅ | — | Token `X-API-Key` pour les clients |
 | `LLM_MODEL` | | `openai/gpt-4o-mini` | Modèle de chat |
 | `EMBEDDING_MODEL` | | `openai/text-embedding-3-small` | Modèle d'embedding |
-| `CHROMA_HOST` | | `localhost` | Hôte ChromaDB |
-| `CHROMA_PORT` | | `8001` | Port ChromaDB |
+| `CHROMA_MODE` | | `http` | Mode ChromaDB : `http` (service externe) ou `embedded` (in-process, Fly.io) |
+| `CHROMA_DATA_PATH` | | `/data/chroma` | Répertoire de persistance — mode `embedded` uniquement |
+| `CHROMA_HOST` | | `localhost` | Hôte ChromaDB — mode `http` uniquement |
+| `CHROMA_PORT` | | `8001` | Port ChromaDB — mode `http` uniquement |
 | `LLM_TIMEOUT` | | `60` | Timeout appel LLM (secondes) |
 | `LLM_MAX_RETRIES` | | `2` | Tentatives max LLM avec backoff exponentiel |
 | `MAX_UPLOAD_SIZE_MB` | | `50` | Taille max upload (Mo) |
@@ -214,6 +216,25 @@ make test-integration  # tests e2e — nécessite make docker-up
 | `WORKERS` | | `1` | Workers uvicorn — mettre `4` en prod |
 | `MAX_CHUNK_SIZE` | | `512` | Taille max des chunks (tokens) |
 | `RETRIEVAL_TOP_K` | | `5` | Nombre de chunks retournés par requête |
+
+---
+
+## Déploiement cloud
+
+Deux configurations prêtes à l'emploi — voir [DEPLOY.md](DEPLOY.md) pour le guide complet.
+
+| Stack | Coût / mois | Notes |
+|---|---|---|
+| **Fly.io** + Supabase + Vercel | ~$2–3 | ChromaDB embarqué (`CHROMA_MODE=embedded`), volume 3 GB, auto-stop |
+| **Render** + Vercel | ~$16.50 | ChromaDB service privé dédié, stack Docker Compose |
+
+```bash
+# Fly.io — déploiement rapide
+fly launch --no-deploy --name enterprise-rag-agent
+fly volumes create chroma_data --region cdg --size 3
+fly secrets set OPENROUTER_API_KEY=... API_KEY=... POSTGRES_DSN=... ALLOWED_ORIGINS='[...]'
+fly deploy
+```
 
 ---
 
