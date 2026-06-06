@@ -25,7 +25,7 @@ services:
       - key: POSTGRES_DSN
         fromDatabase:
           name: rag-postgres
-          property: internalConnectionString
+          property: connectionString
       - key: TRUSTED_PROXIES
         value: "1"                        # Render sits behind one proxy hop
       - key: WORKERS
