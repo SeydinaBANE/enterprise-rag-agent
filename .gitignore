@@ -15,7 +15,6 @@ venv/
 env/
 
 # uv
-uv.lock
 
 # Environment
 .env
