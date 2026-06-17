@@ -32,7 +32,7 @@ jobs:
             type=sha,prefix=sha-
 
       - name: Build Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: false
@@ -50,7 +50,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
