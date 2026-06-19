@@ -1,5 +1,9 @@
 # Fly.io config — https://fly.io/docs/reference/configuration/
 # Deploy: fly launch --no-deploy, then fly secrets set ..., then fly deploy
+# Required secrets (fly secrets set KEY=...): OPENROUTER_API_KEY, API_KEY, POSTGRES_DSN.
+# POSTGRES_DSN is mandatory in production: without it the app falls back to an
+# in-process session store and loses all conversation history when the machine
+# auto-stops (min_machines_running = 0 below).
 app = 'enterprise-rag-agent'
 primary_region = 'cdg'
 

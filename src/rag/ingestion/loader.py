@@ -14,14 +14,20 @@ from src.core.exceptions import UnsupportedSourceError
 from src.core.models import Document
 from src.core.ports import IDocumentLoader
 
+_MAX_REDIRECTS = 5
+
 _PRIVATE_NETWORKS = [
+    ipaddress.ip_network("0.0.0.0/8"),
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
     ipaddress.ip_network("192.168.0.0/16"),
     ipaddress.ip_network("127.0.0.0/8"),
     ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("::/128"),
     ipaddress.ip_network("::1/128"),
     ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
+    ipaddress.ip_network("::ffff:0:0/96"),
 ]
 
 
@@ -32,13 +38,13 @@ def _is_private_host(host: str) -> bool:
     except ValueError:
         pass
     try:
-        resolved = socket.getaddrinfo(host, 80, family=socket.AF_INET)
-        for _family, _, _, _, sockaddr in resolved:
-            addr = ipaddress.ip_address(sockaddr[0])
-            if any(addr in net for net in _PRIVATE_NETWORKS):
-                return True
+        resolved = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
     except OSError:
         return True
+    for _family, _, _, _, sockaddr in resolved:
+        addr = ipaddress.ip_address(sockaddr[0])
+        if any(addr in net for net in _PRIVATE_NETWORKS):
+            return True
     return False
 
 
@@ -72,12 +78,22 @@ class TextLoader(IDocumentLoader):
 
 class URLLoader(IDocumentLoader):
     async def load(self, source: str) -> list[Document]:
-        _validate_url(source)
+        url = source
         async with httpx.AsyncClient(
-            follow_redirects=True,
+            follow_redirects=False,
             timeout=httpx.Timeout(15.0, connect=5.0),
         ) as client:
-            response = await client.get(source)
+            for _ in range(_MAX_REDIRECTS + 1):
+                _validate_url(url)
+                response = await client.get(url)
+                if not response.is_redirect:
+                    break
+                location = response.headers.get("location")
+                if not location:
+                    break
+                url = str(response.url.join(location))
+            else:
+                raise UnsupportedSourceError(f"Too many redirects for: {source}")
             response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
         for tag in soup(["script", "style", "nav", "footer"]):

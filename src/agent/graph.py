@@ -39,7 +39,7 @@ class AgentGraph:
                 {"role": "user", "content": last_message},
             ]
         )
-        state["used_retrieval"] = "RAG" in response.upper()
+        state["used_retrieval"] = response.strip().upper().startswith("RAG")
         return state
 
     async def _rag_search(self, state: AgentState) -> AgentState:
