@@ -17,6 +17,13 @@ _T = TypeVar("_T")
 logger = logging.getLogger(__name__)
 
 
+def _is_retryable(exc: Exception) -> bool:
+    if isinstance(exc, TimeoutError | httpx.TimeoutException | httpx.TransportError):
+        return True
+    status = getattr(exc, "status_code", None)
+    return isinstance(status, int) and (status == 429 or status >= 500)
+
+
 class LiteLLMClient(ILLMClient):
     def __init__(self) -> None:
         litellm.api_base = "https://openrouter.ai/api/v1"
@@ -35,13 +42,16 @@ class LiteLLMClient(ILLMClient):
                 return await asyncio.wait_for(call(*args, **kwargs), timeout=self._timeout)
             except Exception as exc:
                 last_exc = exc
-                if attempt < self._max_retries:
+                if attempt < self._max_retries and _is_retryable(exc):
                     wait = 0.5 * (2**attempt)
                     logger.warning(
                         "llm_retry attempt=%d wait=%.1f error=%s", attempt + 1, wait, str(exc)
                     )
                     await asyncio.sleep(wait)
-        raise last_exc  # type: ignore[misc]
+                else:
+                    break
+        assert last_exc is not None
+        raise last_exc
 
     async def complete(
         self,

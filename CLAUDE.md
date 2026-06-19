@@ -59,7 +59,7 @@ API (FastAPI) → Agent → Domain (core/) ← Infra (infra/)
 
 ### Domain layer (`src/core/`) — zero external dependencies
 
-- `config.py`: `Settings` (pydantic-settings). Instantiated as `settings` singleton at import time. All modules read from `settings`, never from `os.environ` directly. Key fields: `llm_model` (default `"openai/gpt-4o-mini"`), `embedding_model` (default `"openai/text-embedding-3-small"`), `retrieval_top_k` (default `5`), `max_chunk_size` (default `512`), `chunk_overlap` (default `50`), `allowed_origins` (list, default `["http://localhost:3000"]`), `rate_limit_chat` (default `"20/minute"`), `rate_limit_ingest` (default `"5/minute"`), `workers` (default `1`), `llm_timeout` (default `60`), `llm_max_retries` (default `2`), `max_upload_size_mb` (default `50`), `postgres_pool_min` (default `2`), `postgres_pool_max` (default `10`), `trusted_proxies` (default `0`), `allowed_url_domains` (default `""`, comma-separated string of allowed hostnames).
+- `config.py`: `Settings` (pydantic-settings). Instantiated as `settings` singleton at import time. All modules read from `settings`, never from `os.environ` directly. Key fields: `llm_model` (default `"openai/gpt-4o-mini"`), `embedding_model` (default `"openai/text-embedding-3-small"`), `retrieval_top_k` (default `5`), `max_chunk_size` (default `512`), `chunk_overlap` (default `50`), `allowed_origins` (list, default `["http://localhost:3000"]`), `rate_limit_chat` (default `"20/minute"`), `rate_limit_ingest` (default `"5/minute"`), `workers` (default `1`), `llm_timeout` (default `60`), `llm_max_retries` (default `2`), `max_upload_size_mb` (default `50`), `postgres_pool_min` (default `2`), `postgres_pool_max` (default `10`), `trusted_proxies` (default `0`), `allowed_url_domains` (default `""`, comma-separated string of allowed hostnames), `chroma_mode` (default `"http"`, set to `"embedded"` for in-process ChromaDB), `chroma_data_path` (default `"/data/chroma"`, used only in embedded mode), `app_env` (default `"development"`).
 - `ports.py`: Four ABCs — `ILLMClient`, `IVectorStore`, `IDocumentLoader`, `ISessionStore`. The entire codebase depends on these, never on concrete implementations.
 - `models.py`: All Pydantic models. `AgentState` is a `TypedDict` (mutable dict passed through agent steps).
 - `exceptions.py`: `GuardrailViolation`, `LLMError`, `EmbeddingError`, `VectorStoreError`, `DocumentNotFoundError`, `UnsupportedSourceError` — raised in domain/infra, caught in API routes.
@@ -67,7 +67,7 @@ API (FastAPI) → Agent → Domain (core/) ← Infra (infra/)
 ### Infrastructure adapters (`src/infra/`)
 
 - `LiteLLMClient` implements `ILLMClient` via OpenRouter (`openrouter/<model>`). The model prefix is added automatically — don't pass it in call sites. Features configurable `llm_timeout` and `llm_max_retries` with exponential backoff. The healthcheck uses a lightweight HEAD request to the OpenRouter auth endpoint instead of a paid `acompletion("ping")`.
-- `ChromaVectorStore` implements `IVectorStore`. **Critical**: `chromadb.AsyncHttpClient()` must be awaited (it's an async factory). The client is lazily initialized on first use via `_get_client()`. On ingest, `_check_dimension()` guards against embedding dimension mismatch. The chromadb stubs expect numpy arrays; `list[list[float]]` is passed with `# type: ignore[arg-type]` — this is intentional and correct at runtime. `list_documents()` returns `list[tuple[str, int, str]]` (document_id, chunk_count, ingested_at_iso).
+- `ChromaVectorStore` implements `IVectorStore`. The client is lazily initialized on first use via `_get_client()`, which branches on `settings.chroma_mode`: `"http"` (default) awaits `chromadb.AsyncHttpClient()` against `chroma_host:chroma_port`; `"embedded"` awaits `chromadb.AsyncPersistentClient(path=chroma_data_path)` for an in-process store (no separate ChromaDB service — used by the Fly.io free-tier deployment). **Critical**: both factories are async and must be awaited. On ingest, `_check_dimension()` guards against embedding dimension mismatch. The chromadb stubs expect numpy arrays; `list[list[float]]` is passed with `# type: ignore[arg-type]` — this is intentional and correct at runtime. `list_documents()` returns `list[tuple[str, int, str]]` (document_id, chunk_count, ingested_at_iso).
 - `ISessionStore` has two backends: `InMemorySessionStore` (default, in `src/agent/memory.py`) and `PostgresSessionStore` (used when `settings.postgres_dsn` is set). `_build_session_store()` in `main.py` selects between them at startup.
 
 ### RAG pipeline (`src/rag/`)
@@ -145,6 +145,15 @@ Integration tests only require ChromaDB. `docker-compose.test.yml` starts just C
 - `001-langgraph.md` — LangGraph `StateGraph` was the intended approach; the implementation diverged to a plain class. LangGraph remains a declared dependency.
 - `002-chromadb.md` — why ChromaDB over pgvector or Pinecone.
 - `003-openrouter-litellm.md` — why OpenRouter via LiteLLM instead of direct provider SDKs.
+
+## Deployment
+
+`DEPLOY.md` is the source of truth; two cloud targets are configured:
+
+- **Fly.io free-tier** (`fly.toml`): single FastAPI container with **embedded ChromaDB** (`CHROMA_MODE=embedded`) persisted to a Fly volume at `/data/chroma` — no separate vector-store service. Pairs with Supabase (Postgres) + Vercel (frontend). `auto_stop_machines` keeps cost near zero. Deploy: `fly launch --no-deploy` → `fly secrets set OPENROUTER_API_KEY=... API_KEY=... POSTGRES_DSN=...` → `fly deploy`.
+- **Render** (`render.yaml` blueprint): three services — `rag-api` (Docker web), `chromadb` (private service + persistent disk, `CHROMA_MODE=http`), and managed `rag-postgres`. `sync:false` secrets (`OPENROUTER_API_KEY`, `API_KEY`, `ALLOWED_ORIGINS`) are set in the dashboard after first deploy.
+- **Frontend** (`vercel.json`): `rootDirectory: frontend`, auto-detected Next.js. Set `NEXT_PUBLIC_API_URL` to the backend URL, and the backend's `ALLOWED_ORIGINS` to the Vercel URL.
+- Both production targets set `TRUSTED_PROXIES=1` (one proxy hop). Fly.io also sets `APP_ENV=production` via `[env]`; `render.yaml` does **not** set `APP_ENV`, so the Render service falls back to the `app_env="development"` default — add it manually in the dashboard if any code depends on it. Prometheus/Grafana are local-only — use the platform's built-in metrics in production.
 
 ## Key constraints
 

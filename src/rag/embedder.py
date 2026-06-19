@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from src.core.exceptions import EmbeddingError
 from src.core.ports import ILLMClient
 
 
@@ -14,4 +15,6 @@ class Embedder:
 
     async def embed_one(self, text: str) -> list[float]:
         results = await self.embed([text])
+        if not results:
+            raise EmbeddingError("No embedding returned for input text")
         return results[0]

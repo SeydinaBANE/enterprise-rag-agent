@@ -25,6 +25,16 @@ async def test_embedder_empty_input(mock_llm: MockLLMClient) -> None:
     mock_llm.embed.assert_not_called()
 
 
+@pytest.mark.asyncio
+async def test_embed_one_raises_on_empty_response(mock_llm: MockLLMClient) -> None:
+    from src.core.exceptions import EmbeddingError
+
+    mock_llm.embed.return_value = []
+    embedder = Embedder(mock_llm)
+    with pytest.raises(EmbeddingError):
+        await embedder.embed_one("hello")
+
+
 def test_splitter_basic_split() -> None:
     doc = Document(id="d1", content="word " * 100, source="test.txt")
     splitter = TextSplitter(chunk_size=10, chunk_overlap=2)
@@ -162,6 +172,7 @@ async def test_url_loader_loads_content() -> None:
 
     mock_response = MagicMock()
     mock_response.text = "<html><body>Hello world</body></html>"
+    mock_response.is_redirect = False
     mock_response.raise_for_status = MagicMock()
 
     with patch("httpx.AsyncClient") as mock_client:
@@ -203,6 +214,38 @@ async def test_url_loader_rejects_private_ip() -> None:
         await loader.load("http://127.0.0.1:5000/admin")
 
 
+def test_is_private_host_ipv6_and_wildcard() -> None:
+    from src.rag.ingestion.loader import _is_private_host
+
+    assert _is_private_host("::1") is True
+    assert _is_private_host("fe80::1") is True
+    assert _is_private_host("fc00::1") is True
+    assert _is_private_host("0.0.0.0") is True
+    assert _is_private_host("2606:4700:4700::1111") is False
+
+
+@pytest.mark.asyncio
+async def test_url_loader_rejects_redirect_to_private_ip() -> None:
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from src.core.exceptions import UnsupportedSourceError
+    from src.rag.ingestion.loader import URLLoader
+
+    redirect_response = MagicMock()
+    redirect_response.is_redirect = True
+    redirect_response.headers = {"location": "http://169.254.169.254/latest/meta-data/"}
+    redirect_response.url.join.return_value = "http://169.254.169.254/latest/meta-data/"
+
+    with patch("httpx.AsyncClient") as mock_client:
+        mock_client.return_value.__aenter__.return_value.get = AsyncMock(
+            return_value=redirect_response
+        )
+
+        loader = URLLoader()
+        with pytest.raises(UnsupportedSourceError):
+            await loader.load("https://example.com/redirect")
+
+
 @pytest.mark.asyncio
 async def test_pdf_loader_loads_content() -> None:
     from io import BytesIO
@@ -240,6 +283,7 @@ async def test_url_loader_strips_tags() -> None:
 
     mock_response = MagicMock()
     mock_response.text = "<html><body><nav>Navbar</nav><div>Content</div></body></html>"
+    mock_response.is_redirect = False
     mock_response.raise_for_status = MagicMock()
 
     with patch("httpx.AsyncClient") as mock_client:

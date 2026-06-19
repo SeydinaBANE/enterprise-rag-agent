@@ -54,6 +54,19 @@ async def test_agent_invoke_rag_path(
 
 
 @pytest.mark.asyncio
+async def test_agent_routing_ignores_rag_substring(
+    mock_llm: MockLLMClient,
+    mock_vector_store: MockVectorStore,
+    session_store: InMemorySessionStore,
+    rag_tool: RAGSearchTool,
+) -> None:
+    mock_llm.complete.side_effect = ["DIRECT (no storage needed)", "answer"]
+    agent = build_agent(mock_llm, rag_tool, session_store)
+    response = await agent.invoke("How are you?", "session-route")
+    assert response.used_retrieval is False
+
+
+@pytest.mark.asyncio
 async def test_agent_latency_is_populated(
     mock_llm: MockLLMClient,
     mock_vector_store: MockVectorStore,
