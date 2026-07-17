@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from src.domain.exceptions import EmbeddingError
-from src.domain.ports import ILLMClient
+from src.ports.outbound import ILLMClient
 
 
 class Embedder:

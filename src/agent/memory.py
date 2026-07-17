@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import deque
 
 from src.domain.models import ChatMessage
-from src.domain.ports import ISessionStore
+from src.ports.outbound import ISessionStore
 
 MAX_TURNS = 10
 

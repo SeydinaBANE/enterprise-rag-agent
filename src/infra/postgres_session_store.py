@@ -5,7 +5,7 @@ from psycopg_pool import AsyncConnectionPool
 from src.domain.config import settings
 from src.domain.exceptions import VectorStoreError
 from src.domain.models import ChatMessage
-from src.domain.ports import ISessionStore
+from src.ports.outbound import ISessionStore
 
 MAX_TURNS = 10
 

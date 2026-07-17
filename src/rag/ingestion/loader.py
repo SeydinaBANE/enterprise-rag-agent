@@ -12,7 +12,7 @@ from pypdf import PdfReader
 from src.domain.config import settings
 from src.domain.exceptions import UnsupportedSourceError
 from src.domain.models import Document
-from src.domain.ports import IDocumentLoader
+from src.ports.outbound import IDocumentLoader
 
 _MAX_REDIRECTS = 5
 

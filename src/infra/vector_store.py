@@ -11,7 +11,7 @@ from chromadb.api.models.AsyncCollection import AsyncCollection
 from src.domain.config import settings
 from src.domain.exceptions import VectorStoreError
 from src.domain.models import Chunk
-from src.domain.ports import IVectorStore
+from src.ports.outbound import IVectorStore
 
 COLLECTION_NAME = "documents"
 

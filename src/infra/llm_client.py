@@ -10,7 +10,7 @@ import litellm
 
 from src.domain.config import settings
 from src.domain.exceptions import EmbeddingError, LLMError
-from src.domain.ports import ILLMClient
+from src.ports.outbound import ILLMClient
 
 _T = TypeVar("_T")
 

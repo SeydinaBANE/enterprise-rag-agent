@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from src.domain.models import Chunk
-from src.domain.ports import IVectorStore
+from src.ports.outbound import IVectorStore
 from src.rag.embedder import Embedder
 
 

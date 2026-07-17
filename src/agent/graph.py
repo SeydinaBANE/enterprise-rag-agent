@@ -4,12 +4,12 @@ import time
 
 from src.agent.tools import RAGSearchTool
 from src.domain.models import AgentState, ChatMessage, ChatResponse, Source
-from src.domain.ports import ILLMClient, ISessionStore
 from src.observability.telemetry import (
     active_sessions,
     llm_latency_seconds,
     retrieval_latency_seconds,
 )
+from src.ports.outbound import ILLMClient, ISessionStore
 
 ROUTE_PROMPT = """You are a routing assistant. Given a user question, decide if it needs
 document retrieval (RAG) or can be answered directly.

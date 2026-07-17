@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from src.domain.config import settings
 from src.domain.models import Chunk
-from src.domain.ports import IVectorStore
+from src.ports.outbound import IVectorStore
 from src.rag.embedder import Embedder
 
 
