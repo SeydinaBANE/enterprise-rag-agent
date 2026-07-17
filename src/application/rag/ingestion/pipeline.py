@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from src.adapters.secondary.loaders import get_loader
 from src.application.rag.embedder import Embedder
-from src.application.rag.ingestion.loader import get_loader
 from src.application.rag.ingestion.splitter import TextSplitter
 from src.domain.models import Chunk
 from src.ports.inbound import IIngestUseCase

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.infra.llm_client import LiteLLMClient, _is_retryable
+from src.adapters.secondary.llm_client import LiteLLMClient, _is_retryable
 
 
 class _StatusError(Exception):

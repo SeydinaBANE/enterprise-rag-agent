@@ -14,12 +14,12 @@ from tests.conftest import MockLLMClient
 @pytest.fixture(scope="module")
 def integration_client() -> TestClient:
     """Requires a real ChromaDB instance running on CHROMA_HOST:CHROMA_PORT."""
+    from src.adapters.secondary.vector_store import ChromaVectorStore
     from src.application.agent.graph import build_agent
     from src.application.agent.memory import InMemorySessionStore
     from src.application.agent.tools import RAGSearchTool
     from src.application.rag.embedder import Embedder
     from src.application.rag.ingestion.pipeline import IngestPipeline
-    from src.infra.vector_store import ChromaVectorStore
 
     mock_llm = MockLLMClient()
     vector_store = ChromaVectorStore()

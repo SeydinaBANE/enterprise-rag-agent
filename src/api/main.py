@@ -11,6 +11,9 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from src.adapters.secondary.llm_client import LiteLLMClient
+from src.adapters.secondary.postgres_session_store import PostgresSessionStore
+from src.adapters.secondary.vector_store import ChromaVectorStore
 from src.api.middleware.logging import RequestLoggingMiddleware
 from src.api.middleware.ratelimit import limiter
 from src.api.routes import chat, documents, health
@@ -21,9 +24,6 @@ from src.application.rag.embedder import Embedder
 from src.application.rag.ingestion.pipeline import IngestPipeline
 from src.application.rag.retriever import Retriever
 from src.domain.config import settings
-from src.infra.llm_client import LiteLLMClient
-from src.infra.postgres_session_store import PostgresSessionStore
-from src.infra.vector_store import ChromaVectorStore
 from src.ports.outbound import ISessionStore
 
 logger = structlog.get_logger()
