@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from src.api.middleware.auth import require_api_key
 from src.api.middleware.ratelimit import limiter
-from src.core.config import settings
-from src.core.exceptions import GuardrailViolation, LLMError
-from src.core.models import ChatRequest, ChatResponse
+from src.domain.config import settings
+from src.domain.exceptions import GuardrailViolation, LLMError
+from src.domain.models import ChatRequest, ChatResponse
 from src.guardrails import filters
 from src.observability.telemetry import chat_requests_total
 

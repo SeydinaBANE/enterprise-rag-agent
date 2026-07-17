@@ -5,7 +5,7 @@ import pytest
 from src.agent.graph import build_agent
 from src.agent.memory import ConversationMemory, InMemorySessionStore
 from src.agent.tools import RAGSearchTool
-from src.core.models import ChatMessage, Chunk
+from src.domain.models import ChatMessage, Chunk
 from src.rag.embedder import Embedder
 from tests.conftest import MockLLMClient, MockSessionStore, MockVectorStore
 

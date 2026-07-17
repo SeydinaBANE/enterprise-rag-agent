@@ -1,6 +1,6 @@
 import pytest
 
-from src.core.models import Chunk, Document
+from src.domain.models import Chunk, Document
 from src.rag.embedder import Embedder
 from src.rag.ingestion.pipeline import IngestPipeline
 from src.rag.ingestion.splitter import TextSplitter
@@ -27,7 +27,7 @@ async def test_embedder_empty_input(mock_llm: MockLLMClient) -> None:
 
 @pytest.mark.asyncio
 async def test_embed_one_raises_on_empty_response(mock_llm: MockLLMClient) -> None:
-    from src.core.exceptions import EmbeddingError
+    from src.domain.exceptions import EmbeddingError
 
     mock_llm.embed.return_value = []
     embedder = Embedder(mock_llm)
@@ -121,7 +121,7 @@ def test_is_private_host() -> None:
 
 
 def test_get_loader_url_validates_private_ip() -> None:
-    from src.core.exceptions import UnsupportedSourceError
+    from src.domain.exceptions import UnsupportedSourceError
     from src.rag.ingestion.loader import URLLoader
 
     loader = URLLoader()
@@ -137,7 +137,7 @@ def test_get_loader_url_validates_private_ip() -> None:
 
 
 def test_get_loader_url_validates_hostname() -> None:
-    from src.core.exceptions import UnsupportedSourceError
+    from src.domain.exceptions import UnsupportedSourceError
     from src.rag.ingestion.loader import _validate_url
 
     with pytest.raises(UnsupportedSourceError):
@@ -147,8 +147,8 @@ def test_get_loader_url_validates_hostname() -> None:
 def test_get_loader_url_validates_allowed_domains(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from src.core.config import settings
-    from src.core.exceptions import UnsupportedSourceError
+    from src.domain.config import settings
+    from src.domain.exceptions import UnsupportedSourceError
 
     monkeypatch.setattr(settings, "allowed_url_domains", "example.com")
     from src.rag.ingestion.loader import _validate_url
@@ -206,7 +206,7 @@ async def test_url_loader_http_error() -> None:
 
 @pytest.mark.asyncio
 async def test_url_loader_rejects_private_ip() -> None:
-    from src.core.exceptions import UnsupportedSourceError
+    from src.domain.exceptions import UnsupportedSourceError
     from src.rag.ingestion.loader import URLLoader
 
     loader = URLLoader()
@@ -228,7 +228,7 @@ def test_is_private_host_ipv6_and_wildcard() -> None:
 async def test_url_loader_rejects_redirect_to_private_ip() -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
 
-    from src.core.exceptions import UnsupportedSourceError
+    from src.domain.exceptions import UnsupportedSourceError
     from src.rag.ingestion.loader import URLLoader
 
     redirect_response = MagicMock()
@@ -298,7 +298,7 @@ async def test_url_loader_strips_tags() -> None:
 
 
 def test_get_loader_unsupported() -> None:
-    from src.core.exceptions import UnsupportedSourceError
+    from src.domain.exceptions import UnsupportedSourceError
     from src.rag.ingestion.loader import get_loader
 
     with pytest.raises(UnsupportedSourceError):

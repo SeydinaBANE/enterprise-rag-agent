@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.core.models import Chunk
+from src.domain.models import Chunk
 
 
 class MockLLMClient:

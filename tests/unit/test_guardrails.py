@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.core.exceptions import GuardrailViolation
+from src.domain.exceptions import GuardrailViolation
 from src.guardrails.filters import check_input, check_output, redact_pii
 
 

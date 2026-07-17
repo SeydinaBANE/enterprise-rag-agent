@@ -8,9 +8,9 @@ from typing import TypeVar
 import httpx
 import litellm
 
-from src.core.config import settings
-from src.core.exceptions import EmbeddingError, LLMError
-from src.core.ports import ILLMClient
+from src.domain.config import settings
+from src.domain.exceptions import EmbeddingError, LLMError
+from src.domain.ports import ILLMClient
 
 _T = TypeVar("_T")
 

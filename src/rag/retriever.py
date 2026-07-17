@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from src.core.config import settings
-from src.core.models import Chunk
-from src.core.ports import IVectorStore
+from src.domain.config import settings
+from src.domain.models import Chunk
+from src.domain.ports import IVectorStore
 from src.rag.embedder import Embedder
 
 

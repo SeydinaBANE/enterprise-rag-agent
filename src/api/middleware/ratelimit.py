@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import Request
 from slowapi import Limiter
 
-from src.core.config import settings
+from src.domain.config import settings
 
 
 def _get_client_ip(request: Request) -> str:

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import uuid
 
-from src.core.config import settings
-from src.core.models import Chunk, Document
+from src.domain.config import settings
+from src.domain.models import Chunk, Document
 
 
 class TextSplitter:

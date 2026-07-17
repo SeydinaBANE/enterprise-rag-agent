@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from src.core.models import ChatMessage, Chunk, Document
+from src.domain.models import ChatMessage, Chunk, Document
 
 
 class IDocumentLoader(ABC):

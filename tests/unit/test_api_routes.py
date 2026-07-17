@@ -16,7 +16,7 @@ def client(
     mock_vector_store: MockVectorStore,
     monkeypatch: pytest.MonkeyPatch,
 ) -> TestClient:
-    import src.core.config as _cfg
+    import src.domain.config as _cfg
 
     monkeypatch.setattr(_cfg.settings, "api_key", "test-api-key")
 
@@ -87,7 +87,7 @@ def test_metrics_endpoint(client: TestClient) -> None:
 
 
 def test_ingest_file_success(client: TestClient, mock_llm: MockLLMClient) -> None:
-    from src.core.models import Document
+    from src.domain.models import Document
 
     mock_loader = MagicMock()
     mock_loader.load = AsyncMock(
@@ -108,7 +108,7 @@ def test_ingest_file_success(client: TestClient, mock_llm: MockLLMClient) -> Non
 
 
 def test_ingest_url_success(client: TestClient, mock_llm: MockLLMClient) -> None:
-    from src.core.models import Document
+    from src.domain.models import Document
 
     mock_loader = MagicMock()
     mock_loader.load = AsyncMock(
@@ -136,7 +136,7 @@ def test_list_documents(client: TestClient, mock_vector_store: MockVectorStore) 
 
 
 def test_ingest_file_unsupported_source_error(client: TestClient) -> None:
-    from src.core.exceptions import UnsupportedSourceError
+    from src.domain.exceptions import UnsupportedSourceError
 
     with patch(
         "src.rag.ingestion.pipeline.get_loader",
@@ -151,7 +151,7 @@ def test_ingest_file_unsupported_source_error(client: TestClient) -> None:
 
 
 def test_ingest_file_embedding_error(client: TestClient) -> None:
-    from src.core.exceptions import EmbeddingError
+    from src.domain.exceptions import EmbeddingError
 
     with patch(
         "src.rag.ingestion.pipeline.get_loader",
@@ -166,7 +166,7 @@ def test_ingest_file_embedding_error(client: TestClient) -> None:
 
 
 def test_ingest_url_vector_store_error(client: TestClient) -> None:
-    from src.core.exceptions import VectorStoreError
+    from src.domain.exceptions import VectorStoreError
 
     with patch(
         "src.rag.ingestion.pipeline.get_loader",
@@ -181,7 +181,7 @@ def test_ingest_url_vector_store_error(client: TestClient) -> None:
 
 
 def test_ingest_url_embedding_error(client: TestClient) -> None:
-    from src.core.exceptions import EmbeddingError
+    from src.domain.exceptions import EmbeddingError
 
     with patch(
         "src.rag.ingestion.pipeline.get_loader",
@@ -213,7 +213,7 @@ def test_list_documents_with_ingested_at(
 def test_ingest_file_vector_store_error(
     client: TestClient, mock_vector_store: MockVectorStore
 ) -> None:
-    from src.core.exceptions import VectorStoreError
+    from src.domain.exceptions import VectorStoreError
 
     mock_vector_store.add_chunks.side_effect = VectorStoreError("db down")
     response = client.post(
@@ -238,7 +238,7 @@ def test_ingest_file_too_large(client: TestClient) -> None:
 def test_list_documents_storage_error(
     client: TestClient, mock_vector_store: MockVectorStore
 ) -> None:
-    from src.core.exceptions import VectorStoreError
+    from src.domain.exceptions import VectorStoreError
 
     mock_vector_store.list_documents.side_effect = VectorStoreError("db down")
     response = client.get("/documents", headers={"X-API-Key": "test-api-key"})

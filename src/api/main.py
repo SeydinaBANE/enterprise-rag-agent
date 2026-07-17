@@ -17,8 +17,8 @@ from src.agent.tools import RAGSearchTool
 from src.api.middleware.logging import RequestLoggingMiddleware
 from src.api.middleware.ratelimit import limiter
 from src.api.routes import chat, documents, health
-from src.core.config import settings
-from src.core.ports import ISessionStore
+from src.domain.config import settings
+from src.domain.ports import ISessionStore
 from src.infra.llm_client import LiteLLMClient
 from src.infra.postgres_session_store import PostgresSessionStore
 from src.infra.vector_store import ChromaVectorStore

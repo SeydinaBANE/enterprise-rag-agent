@@ -5,7 +5,7 @@ import hmac
 from fastapi import HTTPException, Request, Security
 from fastapi.security import APIKeyHeader
 
-from src.core.config import settings
+from src.domain.config import settings
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from src.core.models import Chunk
-from src.core.ports import IVectorStore
+from src.domain.models import Chunk
+from src.domain.ports import IVectorStore
 from src.rag.embedder import Embedder
 from src.rag.ingestion.loader import get_loader
 from src.rag.ingestion.splitter import TextSplitter

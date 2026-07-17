@@ -9,9 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 
 from src.api.middleware.auth import require_api_key
 from src.api.middleware.ratelimit import limiter
-from src.core.config import settings
-from src.core.exceptions import EmbeddingError, UnsupportedSourceError, VectorStoreError
-from src.core.models import DocumentMeta, IngestRequest, IngestResponse
+from src.domain.config import settings
+from src.domain.exceptions import EmbeddingError, UnsupportedSourceError, VectorStoreError
+from src.domain.models import DocumentMeta, IngestRequest, IngestResponse
 from src.observability.telemetry import ingest_requests_total
 
 router = APIRouter()

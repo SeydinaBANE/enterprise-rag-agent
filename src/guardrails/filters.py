@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from src.core.exceptions import GuardrailViolation
+from src.domain.exceptions import GuardrailViolation
 
 _PII_PATTERNS = [
     re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),

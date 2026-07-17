@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from psycopg_pool import AsyncConnectionPool
 
-from src.core.config import settings
-from src.core.exceptions import VectorStoreError
-from src.core.models import ChatMessage
-from src.core.ports import ISessionStore
+from src.domain.config import settings
+from src.domain.exceptions import VectorStoreError
+from src.domain.models import ChatMessage
+from src.domain.ports import ISessionStore
 
 MAX_TURNS = 10
 

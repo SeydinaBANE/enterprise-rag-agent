@@ -3,8 +3,8 @@ from __future__ import annotations
 import time
 
 from src.agent.tools import RAGSearchTool
-from src.core.models import AgentState, ChatMessage, ChatResponse, Source
-from src.core.ports import ILLMClient, ISessionStore
+from src.domain.models import AgentState, ChatMessage, ChatResponse, Source
+from src.domain.ports import ILLMClient, ISessionStore
 from src.observability.telemetry import (
     active_sessions,
     llm_latency_seconds,

@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.api.main import create_app
-from src.core.config import settings
+from src.domain.config import settings
 from tests.conftest import MockLLMClient
 
 

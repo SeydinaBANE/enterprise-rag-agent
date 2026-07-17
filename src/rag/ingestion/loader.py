@@ -9,10 +9,10 @@ import httpx
 from bs4 import BeautifulSoup
 from pypdf import PdfReader
 
-from src.core.config import settings
-from src.core.exceptions import UnsupportedSourceError
-from src.core.models import Document
-from src.core.ports import IDocumentLoader
+from src.domain.config import settings
+from src.domain.exceptions import UnsupportedSourceError
+from src.domain.models import Document
+from src.domain.ports import IDocumentLoader
 
 _MAX_REDIRECTS = 5
 
