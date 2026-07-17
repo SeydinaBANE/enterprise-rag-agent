@@ -7,12 +7,13 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 
-from src.api.middleware.auth import require_api_key
-from src.api.middleware.ratelimit import limiter
+from src.adapters.primary.api.middleware.auth import require_api_key
+from src.adapters.primary.api.middleware.ratelimit import limiter
 from src.domain.config import settings
 from src.domain.exceptions import EmbeddingError, UnsupportedSourceError, VectorStoreError
 from src.domain.models import DocumentMeta, IngestRequest, IngestResponse
 from src.observability.telemetry import ingest_requests_total
+from src.ports.inbound import IIngestUseCase
 
 router = APIRouter()
 
@@ -26,7 +27,7 @@ _MAX_FILE_SIZE = settings.max_upload_size_mb * 1024 * 1024
 )
 @limiter.limit(settings.rate_limit_ingest)
 async def ingest_file(request: Request, file: UploadFile) -> IngestResponse:
-    pipeline = request.app.state.pipeline
+    pipeline: IIngestUseCase = request.app.state.pipeline
     suffix = Path(file.filename or "upload").suffix or ".bin"
 
     data = await file.read()
@@ -68,7 +69,7 @@ async def ingest_file(request: Request, file: UploadFile) -> IngestResponse:
 )
 @limiter.limit(settings.rate_limit_ingest)
 async def ingest_url(request: Request, body: IngestRequest) -> IngestResponse:
-    pipeline = request.app.state.pipeline
+    pipeline: IIngestUseCase = request.app.state.pipeline
 
     try:
         chunks = await pipeline.run(body.url)

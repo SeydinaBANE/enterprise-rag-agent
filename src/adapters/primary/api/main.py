@@ -11,12 +11,12 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from src.adapters.primary.api.middleware.logging import RequestLoggingMiddleware
+from src.adapters.primary.api.middleware.ratelimit import limiter
+from src.adapters.primary.api.routes import chat, documents, health
 from src.adapters.secondary.llm_client import LiteLLMClient
 from src.adapters.secondary.postgres_session_store import PostgresSessionStore
 from src.adapters.secondary.vector_store import ChromaVectorStore
-from src.api.middleware.logging import RequestLoggingMiddleware
-from src.api.middleware.ratelimit import limiter
-from src.api.routes import chat, documents, health
 from src.application.agent.graph import build_agent
 from src.application.agent.memory import InMemorySessionStore
 from src.application.agent.tools import RAGSearchTool

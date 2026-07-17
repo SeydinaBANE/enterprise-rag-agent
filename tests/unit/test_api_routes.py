@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from src.api.main import create_app
+from src.adapters.primary.api.main import create_app
 from tests.conftest import MockLLMClient, MockVectorStore
 
 

@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from src.api.middleware.auth import require_api_key
-from src.api.middleware.ratelimit import limiter
+from src.adapters.primary.api.middleware.auth import require_api_key
+from src.adapters.primary.api.middleware.ratelimit import limiter
 from src.domain.config import settings
 from src.domain.exceptions import GuardrailViolation, LLMError
 from src.domain.models import ChatRequest, ChatResponse
 from src.guardrails import filters
 from src.observability.telemetry import chat_requests_total
+from src.ports.inbound import IChatUseCase
 
 router = APIRouter()
 
@@ -22,9 +23,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         chat_requests_total.labels(status="blocked").inc()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    from src.application.agent.graph import AgentGraph
-
-    agent: AgentGraph = request.app.state.agent
+    agent: IChatUseCase = request.app.state.agent
 
     try:
         response = await agent.invoke(body.message, body.session_id)

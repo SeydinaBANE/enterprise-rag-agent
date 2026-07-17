@@ -31,7 +31,7 @@ test-all:
 	uv run pytest tests/ -v --cov-fail-under=80
 
 run:
-	uv run uvicorn src.api.main:app --reload --port 8000
+	uv run uvicorn src.adapters.primary.api.main:app --reload --port 8000
 
 docker-up:
 	docker compose up -d

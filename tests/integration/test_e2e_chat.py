@@ -6,7 +6,7 @@ import tempfile
 import pytest
 from fastapi.testclient import TestClient
 
-from src.api.main import create_app
+from src.adapters.primary.api.main import create_app
 from src.domain.config import settings
 from tests.conftest import MockLLMClient
 
