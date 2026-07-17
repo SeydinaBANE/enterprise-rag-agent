@@ -29,7 +29,7 @@ in `.env` requires zero code changes.
 
 ## Consequences
 
-- `src/infra/llm_client.py` wraps `litellm.acompletion()` and `litellm.aembedding()`
+- `src/adapters/secondary/llm_client.py` wraps `litellm.acompletion()` and `litellm.aembedding()`
 - `OPENROUTER_API_KEY` and `LLM_MODEL` are the only config needed in `.env`
 - Unit tests mock `llm_client.complete()` and `llm_client.embed()` at the interface level
 - Switching to a direct provider requires only changing env vars (no code)

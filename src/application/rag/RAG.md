@@ -1,4 +1,4 @@
-# src/rag/
+# src/application/rag/
 
 Pipeline de Retrieval-Augmented Generation : ingestion de documents (chargement, découpage, embedding, stockage) et récupération de chunks pertinents à la requête.
 

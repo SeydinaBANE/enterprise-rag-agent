@@ -1,12 +1,12 @@
-# src/infra/
+# src/adapters/secondary/
 
-Adaptateurs d'infrastructure : implémentations concrètes des interfaces définies dans `src/core/ports.py`. Chaque classe de ce dossier dépend d'une librairie externe (ChromaDB, LiteLLM, psycopg) et traduit ses appels en contrats domain.
+Adaptateurs d'infrastructure (secondaires/driven) : implémentations concrètes des ports définis dans `src/ports/outbound.py`. Chaque classe de ce dossier dépend d'une librairie externe (ChromaDB, LiteLLM, psycopg) et traduit ses appels en contrats domain.
 
 ---
 
 ## Règle fondamentale
 
-`src/infra/` peut importer `src/core/`. `src/core/` ne peut jamais importer `src/infra/`. Les classes concrètes ne sont instanciées que dans `create_app()` (`src/api/main.py`).
+`src/adapters/secondary/` peut importer `src/domain/`. `src/domain/` ne peut jamais importer `src/adapters/secondary/`. Les classes concrètes ne sont instanciées que dans `create_app()` (`src/adapters/primary/api/main.py`).
 
 ---
 
@@ -128,9 +128,9 @@ Toutes les exceptions Postgres sont wrappées en `VectorStoreError` (réutilisat
 
 ## Ajouter un nouvel adaptateur
 
-1. Créer `src/infra/<nom>.py`
-2. Importer l'interface cible depuis `src/core/ports.py`
+1. Créer `src/adapters/secondary/<nom>.py`
+2. Importer l'interface cible depuis `src/ports/outbound.py`
 3. Implémenter toutes les méthodes abstraites
-4. Wraper les exceptions externes en exceptions domaine (`src/core/exceptions.py`)
+4. Wraper les exceptions externes en exceptions domaine (`src/domain/exceptions.py`)
 5. Injecter dans `create_app()` à la place ou en complément de l'adaptateur existant
 6. Écrire au minimum un test unitaire (mock des appels externes) et un test d'intégration marqué `@pytest.mark.integration`

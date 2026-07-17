@@ -33,14 +33,17 @@ make docker-build         # produces standalone image enterprise-rag-agent:local
 
 ## Architecture
 
-Clean Architecture — deps flow inward toward `src/core/`:
+Hexagonal (ports & adapters) — deps flow inward toward `src/domain/` and `src/ports/`:
 
 ```
-API (FastAPI) → Agent → Domain (core/) ← Infra (adapters)
+adapters/primary/api (FastAPI) → ports/inbound → application/ (agent, rag) → ports/outbound ← adapters/secondary
+                                                        ↓
+                                                    domain/
 ```
 
-- **`src/core/`** — ZERO external library imports (stdlib + pydantic ecosystem only). Contains `Settings` singleton (`pydantic_settings.BaseSettings`), four ABC ports (`ILLMClient`, `IVectorStore`, `IDocumentLoader`, `ISessionStore`), Pydantic models, exceptions.
-- **AgentGraph** (`src/agent/graph.py`) is a **procedural class** (not LangGraph StateGraph). Runs `_route → _rag_search → _generate` sequentially on an `AgentState` dict.
+- **`src/domain/`** — ZERO external library imports (stdlib + pydantic ecosystem only). Contains `Settings` singleton (`pydantic_settings.BaseSettings`), Pydantic models, exceptions.
+- **`src/ports/`** — `outbound.py` has the four driven ABCs (`ILLMClient`, `IVectorStore`, `IDocumentLoader`, `ISessionStore`); `inbound.py` has the driving ABCs (`IChatUseCase`, `IIngestUseCase`).
+- **AgentGraph** (`src/application/agent/graph.py`, implements `IChatUseCase`) is a **procedural class** (not LangGraph StateGraph). Runs `_route → _rag_search → _generate` sequentially on an `AgentState` dict.
 - **All config values** from `settings` — never `os.environ` directly.
 - **Prometheus metrics** are module-level singletons in `src/observability/telemetry.py` — never create metric instances elsewhere.
 

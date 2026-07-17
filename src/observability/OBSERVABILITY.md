@@ -67,7 +67,7 @@ Buckets : `[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]` secondes.
 
 ## Endpoint Prometheus
 
-`GET /metrics` dans `src/api/routes/health.py` retourne `generate_latest()` avec le content-type `CONTENT_TYPE_LATEST`. Pas d'auth requise — prévu pour le scraping Prometheus interne.
+`GET /metrics` dans `src/adapters/primary/api/routes/health.py` retourne `generate_latest()` avec le content-type `CONTENT_TYPE_LATEST`. Pas d'auth requise — prévu pour le scraping Prometheus interne.
 
 ---
 

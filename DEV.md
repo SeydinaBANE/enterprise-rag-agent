@@ -66,15 +66,15 @@ uv run pytest tests/unit/ -v
 
 ## Adding a New Agent Tool
 
-1. Implement a tool class in `src/agent/tools.py` with a `run()` async method
-2. Inject it in `AgentGraph.__init__()` in `src/agent/graph.py` and call it in `_rag_search()`
+1. Implement a tool class in `src/application/agent/tools.py` with a `run()` async method
+2. Inject it in `AgentGraph.__init__()` in `src/application/agent/graph.py` and call it in `_rag_search()`
 3. Add a unit test in `tests/unit/test_agent_graph.py`
 4. Document the new behavior in `CLI.md` if it changes the API contract
 
 ## Adding a New Document Loader
 
-1. Implement `IDocumentLoader` (from `src/core/ports.py`) in `src/rag/ingestion/loader.py`
-2. Register the new loader in `src/rag/ingestion/pipeline.py`
+1. Implement `IDocumentLoader` (from `src/ports/outbound.py`) in `src/adapters/secondary/loaders.py`
+2. Register the new loader in `src/application/rag/ingestion/pipeline.py`
 3. Add unit tests and at least one edge case test
 
 ## Code Style

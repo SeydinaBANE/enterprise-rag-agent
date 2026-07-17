@@ -1,4 +1,4 @@
-# src/api/
+# src/adapters/primary/api/
 
 Couche de présentation HTTP : expose les endpoints FastAPI, applique l'authentification, le rate limiting, le logging, et convertit les exceptions domaine en réponses HTTP.
 
@@ -123,7 +123,7 @@ Flux :
 3. `check_output(response.answer)` → rédaction PII
 4. Incrémente `chat_requests_total` (label : `ok` | `blocked` | `error`)
 
-`body.session_id` est `"default"` si non fourni. Pas de validation de format — voir les contraintes de `ChatRequest` dans `src/core/models.py`.
+`body.session_id` est `"default"` si non fourni. Pas de validation de format — voir les contraintes de `ChatRequest` dans `src/domain/models.py`.
 
 ### `documents.py` — Ingestion et listing
 
@@ -180,7 +180,7 @@ Retourne le texte Prometheus (`generate_latest()`). Pas d'auth requise — à pr
 
 ## Ajouter une route
 
-1. Créer `src/api/routes/<nom>.py` avec un `router = APIRouter()`
+1. Créer `src/adapters/primary/api/routes/<nom>.py` avec un `router = APIRouter()`
 2. Ajouter `Depends(require_api_key)` si la route nécessite une auth
 3. Inclure le router dans `create_app()` : `app.include_router(<nom>.router)`
 4. Incrémenter un counter Prometheus dans chaque branche de la route

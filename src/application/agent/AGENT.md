@@ -1,4 +1,4 @@
-# src/agent/
+# src/application/agent/
 
 Couche d'orchestration : reçoit un message utilisateur, décide s'il faut faire du RAG, génère la réponse via le LLM, persiste l'historique.
 
@@ -14,7 +14,7 @@ AgentGraph.invoke()
 ILLMClient  ·  RAGSearchTool  ·  ISessionStore
 ```
 
-L'agent est instancié **une seule fois** au démarrage dans `create_app()` (`src/api/main.py`) et stocké sur `app.state.agent`. Toutes les requêtes partagent la même instance.
+L'agent est instancié **une seule fois** au démarrage dans `create_app()` (`src/adapters/primary/api/main.py`) et stocké sur `app.state.agent`. Toutes les requêtes partagent la même instance.
 
 ---
 
@@ -92,7 +92,7 @@ history = memory.get_history()  # list[ChatMessage], ordre chronologique
 
 Implémente `ISessionStore`. Dict `session_id → ConversationMemory`, créé à la demande. Les sessions ne sont jamais purgées — elles persistent jusqu'au redémarrage du process.
 
-**Limite** : état perdu au redémarrage. Pour la persistance, configurer `POSTGRES_DSN` et utiliser `PostgresSessionStore` (`src/infra/postgres_session_store.py`).
+**Limite** : état perdu au redémarrage. Pour la persistance, configurer `POSTGRES_DSN` et utiliser `PostgresSessionStore` (`src/adapters/secondary/postgres_session_store.py`).
 
 `is_healthy()` retourne toujours `True` — c'est intentionnel (pas de dépendance externe).
 

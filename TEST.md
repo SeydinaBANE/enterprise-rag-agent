@@ -226,7 +226,7 @@ La fixture est `scope="module"` : ChromaVectorStore est instancié une seule foi
 ```python
 @pytest.fixture(scope="module")
 def integration_client() -> TestClient:
-    from src.infra.vector_store import ChromaVectorStore  # import local intentionnel
+    from src.adapters.secondary.vector_store import ChromaVectorStore  # import local intentionnel
     vector_store = ChromaVectorStore()
     ...
 ```

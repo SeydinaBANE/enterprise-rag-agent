@@ -16,7 +16,7 @@ filters.check_input(body.message)   # lève GuardrailViolation → 422
 response.answer = filters.check_output(response.answer)  # retourne str nettoyé
 ```
 
-Ne jamais les appeler dans `src/agent/` ou `src/rag/` — c'est une violation de couche.
+Ne jamais les appeler dans `src/application/agent/` ou `src/application/rag/` — c'est une violation de couche.
 
 ---
 

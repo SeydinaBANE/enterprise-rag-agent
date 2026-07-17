@@ -28,7 +28,7 @@ The async HTTP client is used in production (Docker service on port 8001).
 
 ## Consequences
 
-- `src/infra/vector_store.py` implements `IVectorStore` using `chromadb.AsyncHttpClient`
+- `src/adapters/secondary/vector_store.py` implements `IVectorStore` using `chromadb.AsyncHttpClient`
 - Unit tests use `chromadb.EphemeralClient()` via the mock fixture in `tests/conftest.py`
 - Integration tests use the real ChromaDB Docker service
-- Switching to Qdrant requires only a new `IVectorStore` implementation in `src/infra/`
+- Switching to Qdrant requires only a new `IVectorStore` implementation in `src/adapters/secondary/`

@@ -72,13 +72,14 @@ make check
 ## Project Layout
 
 ```
-src/core/        Domain models, ports (interfaces), exceptions — zero ext deps
-src/infra/       ChromaDB and litellm infrastructure adapters
-src/rag/         Document ingestion, embedding, and retrieval pipeline
-src/agent/       AgentGraph (plain class): tools, memory, invoke pipeline
-src/guardrails/  Input/output safety filters
-src/observability OpenTelemetry + Prometheus instrumentation
-src/api/         FastAPI application: routes, middleware, app factory
-tests/unit/      Fast, fully mocked unit tests
-tests/integration/ Real ChromaDB, mocked LLM
+src/domain/                Domain models, exceptions, config — zero ext deps
+src/ports/                 Inbound (use-case) and outbound (driven) port ABCs
+src/adapters/secondary/    ChromaDB, litellm, Postgres, loaders — driven adapters
+src/application/rag/       Document ingestion, embedding, and retrieval pipeline
+src/application/agent/     AgentGraph (plain class): tools, memory, invoke pipeline
+src/guardrails/            Input/output safety filters
+src/observability          OpenTelemetry + Prometheus instrumentation
+src/adapters/primary/api/  FastAPI application: routes, middleware, app factory
+tests/unit/                Fast, fully mocked unit tests
+tests/integration/         Real ChromaDB, mocked LLM
 ```

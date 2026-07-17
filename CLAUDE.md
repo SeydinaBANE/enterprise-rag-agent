@@ -49,45 +49,50 @@ Python 3.12 required (`requires-python = ">=3.12"`). Line length is **100** char
 
 ## Architecture
 
-**Clean Architecture in 4 layers** — dependencies only flow inward:
+**Hexagonal (ports & adapters)** — dependencies only flow inward, toward `domain/` and `ports/`:
 
 ```
-API (FastAPI) → Agent → Domain (core/) ← Infra (infra/)
-                  ↓
-               RAG pipeline
+adapters/primary/api (FastAPI) → ports/inbound → application/ (agent, rag) → ports/outbound ← adapters/secondary
+                                                        ↓
+                                                    domain/ (models, exceptions, config)
 ```
 
-### Domain layer (`src/core/`) — zero external dependencies
+`application/` implements the inbound ports and depends only on the outbound ports (never on concrete adapters). `adapters/secondary/` implements the outbound ports. `adapters/primary/api/` depends only on the inbound ports and triggers use cases — it never imports `application/` classes directly.
+
+### Domain layer (`src/domain/`) — zero external dependencies
 
 - `config.py`: `Settings` (pydantic-settings). Instantiated as `settings` singleton at import time. All modules read from `settings`, never from `os.environ` directly. Key fields: `llm_model` (default `"openai/gpt-4o-mini"`), `embedding_model` (default `"openai/text-embedding-3-small"`), `retrieval_top_k` (default `5`), `max_chunk_size` (default `512`), `chunk_overlap` (default `50`), `allowed_origins` (list, default `["http://localhost:3000"]`), `rate_limit_chat` (default `"20/minute"`), `rate_limit_ingest` (default `"5/minute"`), `workers` (default `1`), `llm_timeout` (default `60`), `llm_max_retries` (default `2`), `max_upload_size_mb` (default `50`), `postgres_pool_min` (default `2`), `postgres_pool_max` (default `10`), `trusted_proxies` (default `0`), `allowed_url_domains` (default `""`, comma-separated string of allowed hostnames), `chroma_mode` (default `"http"`, set to `"embedded"` for in-process ChromaDB), `chroma_data_path` (default `"/data/chroma"`, used only in embedded mode), `app_env` (default `"development"`).
-- `ports.py`: Four ABCs — `ILLMClient`, `IVectorStore`, `IDocumentLoader`, `ISessionStore`. The entire codebase depends on these, never on concrete implementations.
 - `models.py`: All Pydantic models. `AgentState` is a `TypedDict` (mutable dict passed through agent steps).
-- `exceptions.py`: `GuardrailViolation`, `LLMError`, `EmbeddingError`, `VectorStoreError`, `DocumentNotFoundError`, `UnsupportedSourceError` — raised in domain/infra, caught in API routes.
+- `exceptions.py`: `GuardrailViolation`, `LLMError`, `EmbeddingError`, `VectorStoreError`, `DocumentNotFoundError`, `UnsupportedSourceError` — raised in domain/adapters, caught in API routes.
 
-### Infrastructure adapters (`src/infra/`)
+### Ports (`src/ports/`)
+
+- `outbound.py` (driven ports — the application needs these, adapters provide them): `ILLMClient`, `IVectorStore`, `IDocumentLoader`, `ISessionStore`. The entire codebase depends on these, never on concrete implementations.
+- `inbound.py` (driving ports — the primary adapter depends on these, the application provides them): `IChatUseCase` (`invoke(request_message, session_id) -> ChatResponse`, implemented by `AgentGraph`) and `IIngestUseCase` (`run(source) -> list[Chunk]`, implemented by `IngestPipeline`).
+
+### Secondary adapters (`src/adapters/secondary/`)
 
 - `LiteLLMClient` implements `ILLMClient` via OpenRouter (`openrouter/<model>`). The model prefix is added automatically — don't pass it in call sites. Features configurable `llm_timeout` and `llm_max_retries` with exponential backoff. The healthcheck uses a lightweight HEAD request to the OpenRouter auth endpoint instead of a paid `acompletion("ping")`.
 - `ChromaVectorStore` implements `IVectorStore`. The client is lazily initialized on first use via `_get_client()`, which branches on `settings.chroma_mode`: `"http"` (default) awaits `chromadb.AsyncHttpClient()` against `chroma_host:chroma_port`; `"embedded"` awaits `chromadb.AsyncPersistentClient(path=chroma_data_path)` for an in-process store (no separate ChromaDB service — used by the Fly.io free-tier deployment). **Critical**: both factories are async and must be awaited. On ingest, `_check_dimension()` guards against embedding dimension mismatch. The chromadb stubs expect numpy arrays; `list[list[float]]` is passed with `# type: ignore[arg-type]` — this is intentional and correct at runtime. `list_documents()` returns `list[tuple[str, int, str]]` (document_id, chunk_count, ingested_at_iso).
-- `ISessionStore` has two backends: `InMemorySessionStore` (default, in `src/agent/memory.py`) and `PostgresSessionStore` (used when `settings.postgres_dsn` is set). `_build_session_store()` in `main.py` selects between them at startup.
+- `ISessionStore` has two backends: `InMemorySessionStore` (default, in `src/application/agent/memory.py` — application-side because it's an in-process cache tied to agent orchestration, not an external system) and `PostgresSessionStore` (in `src/adapters/secondary/postgres_session_store.py`, used when `settings.postgres_dsn` is set). `_build_session_store()` in `main.py` selects between them at startup.
+- `loaders.py`: `URLLoader` (httpx + BeautifulSoup), `PDFLoader` (pypdf), `TextLoader` — all implement `IDocumentLoader`. `get_loader(source)` dispatches on source: URLs → `URLLoader`, `.pdf` → `PDFLoader`, `.txt/.md/.rst` → `TextLoader`. URLs go through an SSRF guard (`_validate_url()`) that blocks private IPs via DNS resolution and supports an optional domain allowlist (`ALLOWED_URL_DOMAINS`). httpx timeout is `Timeout(15.0, connect=5.0)`. Add new formats by implementing `IDocumentLoader` in `loaders.py` and registering in `get_loader()`.
 
-### RAG pipeline (`src/rag/`)
+### Application layer (`src/application/`) — use cases, no FastAPI dependency
 
-Ingestion flow: `get_loader(source)` → `IDocumentLoader.load()` → `TextSplitter.split()` → `Embedder.embed()` → `IVectorStore.add_chunks()`. The ingestion components live in `src/rag/ingestion/` (`loader.py`, `splitter.py`, `pipeline.py`). `get_loader()` dispatches on source: URLs → `URLLoader` (httpx + BeautifulSoup), `.pdf` → `PDFLoader` (pypdf), `.txt/.md/.rst` → `TextLoader`. URLs go through an SSRF guard (`_validate_url()`) that blocks private IPs via DNS resolution and supports an optional domain allowlist (`ALLOWED_URL_DOMAINS`). httpx timeout is `Timeout(15.0, connect=5.0)`. Add new formats by implementing `IDocumentLoader` in `loader.py` and registering in `get_loader()`.
+**RAG pipeline** (`application/rag/`): `IngestPipeline.run()` (in `ingestion/pipeline.py`, implements `IIngestUseCase`) drives the ingestion flow: `get_loader(source)` → `IDocumentLoader.load()` → `TextSplitter.split()` → `Embedder.embed()` → `IVectorStore.add_chunks()`. The ingestion orchestration components live in `application/rag/ingestion/` (`splitter.py`, `pipeline.py`) — the loader *implementations* live in `adapters/secondary/loaders.py` since they implement the outbound port.
 
-### Agent (`src/agent/`)
-
-`AgentGraph` (`graph.py`) is a **plain procedural class — not a LangGraph StateGraph** (LangGraph is a dependency but unused for orchestration). `AgentGraph.invoke()` runs three async steps sequentially on an `AgentState` dict:
+**Agent** (`application/agent/`): `AgentGraph` (`graph.py`, implements `IChatUseCase`) is a **plain procedural class — not a LangGraph StateGraph** (LangGraph is a dependency but unused for orchestration). `AgentGraph.invoke()` runs three async steps sequentially on an `AgentState` dict:
 1. `_route()` — LLM classifies query as RAG or DIRECT
 2. `_rag_search()` — only if RAG; delegates to `RAGSearchTool` (`tools.py`), which embeds the query and calls `IVectorStore.search()`
 3. `_generate()` — LLM generates answer with conversation history + retrieved context
 
-**`RAGSearchTool` vs `Retriever`**: both wrap `IVectorStore` + `Embedder`, but serve different callers. `RAGSearchTool` (in `src/agent/tools.py`) is the agent's search interface and returns a `SearchResult` with formatted text. `Retriever` (in `src/rag/retriever.py`) is used by API route handlers for document lookup and returns raw `Chunk` lists.
+**`RAGSearchTool` vs `Retriever`**: both wrap `IVectorStore` + `Embedder`, but serve different callers. `RAGSearchTool` (in `application/agent/tools.py`) is the agent's search interface and returns a `SearchResult` with formatted text. `Retriever` (in `application/rag/retriever.py`) is used by API route handlers for document lookup and returns raw `Chunk` lists.
 
 Session memory lives in `InMemorySessionStore` (in-process dict of `ConversationMemory`, max 10 turns). All services are instantiated once in `create_app()` and stored on `app.state`: `llm_client`, `vector_store`, `embedder`, `retriever`, `session_store`, `pipeline`, `agent`.
 
 ### Guardrails (`src/guardrails/filters.py`)
 
-`check_input()` enforces a 4096-char limit and blocks prompt-injection patterns. `check_output()` enforces an 8192-char limit and calls `redact_pii()`, which replaces SSNs, credit card numbers, emails, and phone numbers with `[REDACTED]`.
+`check_input()` enforces a 4096-char limit and blocks prompt-injection patterns. `check_output()` enforces an 8192-char limit and calls `redact_pii()`, which replaces SSNs, credit card numbers, emails, and phone numbers with `[REDACTED]`. Cross-cutting — sits outside the hexagon, called directly from API routes.
 
 ### Logging
 
@@ -95,15 +100,15 @@ Structured JSON logging via `structlog` with ISO timestamps. Use `structlog.get_
 
 ### Observability (`src/observability/telemetry.py`)
 
-Prometheus metrics module-level singletons: `chat_requests_total` (Counter, labelled `status`), `ingest_requests_total`, `retrieval_latency_seconds` (Histogram), `llm_latency_seconds` (Histogram), `active_sessions` (Gauge). Import these directly in routes/tools — never create new metric instances.
+Prometheus metrics module-level singletons: `chat_requests_total` (Counter, labelled `status`), `ingest_requests_total`, `retrieval_latency_seconds` (Histogram), `llm_latency_seconds` (Histogram), `active_sessions` (Gauge). Import these directly in routes/tools — never create new metric instances. Cross-cutting — sits outside the hexagon.
 
-### API (`src/api/`)
+### Primary adapter — API (`src/adapters/primary/api/`)
 
-Routes access services via `request.app.state.<service>`. Auth (`X-API-Key` header) is a FastAPI `Depends` on all data endpoints — never on `/health` or `/metrics`. Guardrail `check_input()` is called before agent invocation; `check_output()` redacts PII from the LLM response before returning.
+Routes access use cases and services via `request.app.state.<service>`, typed through the inbound ports where applicable (`agent: IChatUseCase`, `pipeline: IIngestUseCase`) so routes depend on the port abstraction, not the concrete `application/` classes. Auth (`X-API-Key` header) is a FastAPI `Depends` on all data endpoints — never on `/health` or `/metrics`. Guardrail `check_input()` is called before agent invocation; `check_output()` redacts PII from the LLM response before returning.
 
 **Lifespan** (`main.py`): on startup, checks ChromaDB and Postgres reachability before accepting traffic (fail-fast). On shutdown, closes the `PostgresSessionStore` connection pool cleanly.
 
-**Rate limiting** (`src/api/middleware/ratelimit.py`): module-level `slowapi.Limiter` singleton. IP detection uses X-Forwarded-For → X-Real-IP → client.host fallback (proxy-aware). Applied with `@limiter.limit(settings.rate_limit_chat)` on `/chat` (default 20/min) and `@limiter.limit(settings.rate_limit_ingest)` on ingest endpoints (default 5/min). The `request: Request` parameter must be the first argument of any rate-limited route function.
+**Rate limiting** (`adapters/primary/api/middleware/ratelimit.py`): module-level `slowapi.Limiter` singleton. IP detection uses X-Forwarded-For → X-Real-IP → client.host fallback (proxy-aware). Applied with `@limiter.limit(settings.rate_limit_chat)` on `/chat` (default 20/min) and `@limiter.limit(settings.rate_limit_ingest)` on ingest endpoints (default 5/min). The `request: Request` parameter must be the first argument of any rate-limited route function.
 
 **Global exception handler**: unhandled exceptions return `{"detail": "Internal server error", "request_id": "<uuid>"}` (JSON 500) instead of the default HTML Starlette error page. The `request_id` is set by `RequestLoggingMiddleware` on `request.state.request_id`.
 
@@ -137,7 +142,7 @@ Unit tests mock at the interface boundary using `MockLLMClient`, `MockVectorStor
 
 `asyncio_mode = "auto"` is set in `pyproject.toml` — do **not** add `@pytest.mark.asyncio` to async tests; it causes a duplicate-mark error.
 
-Integration tests only require ChromaDB. `docker-compose.test.yml` starts just ChromaDB (lighter than `make docker-up`) — run `docker compose -f docker-compose.test.yml up -d` before `make test-integration`. Mark integration tests with `@pytest.mark.integration` and import infra adapters inside the fixture, not at module level.
+Integration tests only require ChromaDB. `docker-compose.test.yml` starts just ChromaDB (lighter than `make docker-up`) — run `docker compose -f docker-compose.test.yml up -d` before `make test-integration`. Mark integration tests with `@pytest.mark.integration` and import secondary adapters inside the fixture, not at module level.
 
 ## Architectural decisions
 
@@ -157,9 +162,9 @@ Integration tests only require ChromaDB. `docker-compose.test.yml` starts just C
 
 ## Key constraints
 
-- `src/core/` must remain free of external library imports.
+- `src/domain/` must remain free of external library imports.
 - All config values come from `settings` (never hardcode or read env vars directly).
-- Business exceptions are raised in domain/infra, caught in API routes: `EmbeddingError` → 502, `VectorStoreError` → 500, `LLMError` → 500, `GuardrailViolation` → 422, `UnsupportedSourceError` → 422.
+- Business exceptions are raised in domain/adapters, caught in API routes: `EmbeddingError` → 502, `VectorStoreError` → 500, `LLMError` → 500, `GuardrailViolation` → 422, `UnsupportedSourceError` → 422.
 - Commit format: `<type>(<scope>): <description>`. `.commitlintrc.yml` exists but is **not** enforced by pre-commit — validation is manual.
 - **ChromaDB collection dimension**: the `documents` collection is created on first ingest and its embedding dimension is fixed. If the embedding model changes or tests (mock 384-dim) run before production (1536-dim), delete the collection before re-ingesting: `curl -X DELETE http://localhost:8001/api/v2/tenants/default_tenant/databases/default_database/collections/documents`. The `_check_dimension()` guard now catches mismatches at ingest time with a clear error message.
 - **SSRF guard**: URL ingestion resolves the hostname via `socket.getaddrinfo()` and blocks private IP ranges (10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x, ::1, fc00::/7). `ALLOWED_URL_DOMAINS` is a comma-separated string (e.g. `"example.com,docs.internal"`) — when non-empty, only hostnames ending with one of these values are permitted.

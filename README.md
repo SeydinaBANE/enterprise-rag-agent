@@ -144,18 +144,23 @@ curl http://localhost:8000/documents \
 
 ```
 src/
-├── api/            # FastAPI routes, lifespan, global exception handler
-│   ├── routes/     # chat (rate-limited), documents, health + metrics
-│   └── middleware/ # API key auth, rate limiter (slowapi), request logging
-├── agent/          # AgentGraph (plain class) — route → rag_search → generate
-├── core/           # Domain pur — ports (ABCs), models, exceptions, config
-├── infra/          # Adaptateurs — LiteLLMClient, ChromaVectorStore, PostgresSessionStore
-├── rag/            # Pipeline d'ingestion — ingestion/ (loader, splitter, pipeline), embedder, retriever
-├── guardrails/     # Filtres input/output — injection, PII
-└── observability/  # Métriques Prometheus — singletons module-level
+├── domain/                    # Domaine pur — models, exceptions, config (zéro dépendance framework)
+├── ports/
+│   ├── inbound.py             # Ports entrants (driving) — IChatUseCase, IIngestUseCase
+│   └── outbound.py            # Ports sortants (driven) — ILLMClient, IVectorStore, ISessionStore, IDocumentLoader
+├── application/                # Use cases — orchestration, découplée de FastAPI
+│   ├── agent/                 # AgentGraph implémente IChatUseCase — route → rag_search → generate
+│   └── rag/                   # IngestPipeline implémente IIngestUseCase — ingestion/ (splitter, pipeline), embedder, retriever
+├── adapters/
+│   ├── primary/api/           # Adaptateur pilotant — FastAPI routes, lifespan, global exception handler
+│   │   ├── routes/            # chat (rate-limited), documents, health + metrics
+│   │   └── middleware/        # API key auth, rate limiter (slowapi), request logging
+│   └── secondary/              # Adaptateurs pilotés — LiteLLMClient, ChromaVectorStore, PostgresSessionStore, loaders (URL/PDF/Text)
+├── guardrails/                 # Filtres input/output (cross-cutting) — injection, PII
+└── observability/               # Métriques Prometheus (cross-cutting) — singletons module-level
 ```
 
-**Règle d'or** : les dépendances ne vont que vers `core/`. `infra/` et `api/` implémentent les interfaces de `core/` — jamais l'inverse.
+**Règle d'or (hexagonale)** : les dépendances ne vont que vers `domain/` et `ports/`. `application/` implémente les ports entrants et dépend des ports sortants ; `adapters/secondary/` implémente les ports sortants ; `adapters/primary/` déclenche les ports entrants. Jamais l'inverse.
 
 ---
 

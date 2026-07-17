@@ -27,6 +27,6 @@ Each node is a pure function on `AgentState`, making unit testing straightforwar
 
 ## Consequences
 
-- `src/agent/graph.py` defines a `StateGraph` compiled into a `CompiledGraph`
-- Agent state is defined as `AgentState` TypedDict in `src/core/models.py`
+- `src/application/agent/graph.py` defines a `StateGraph` compiled into a `CompiledGraph`
+- Agent state is defined as `AgentState` TypedDict in `src/domain/models.py`
 - Adding a new step = adding a node and edges, no structural changes to existing code
