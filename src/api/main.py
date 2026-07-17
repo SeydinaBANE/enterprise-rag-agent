@@ -11,20 +11,20 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from src.agent.graph import build_agent
-from src.agent.memory import InMemorySessionStore
-from src.agent.tools import RAGSearchTool
 from src.api.middleware.logging import RequestLoggingMiddleware
 from src.api.middleware.ratelimit import limiter
 from src.api.routes import chat, documents, health
+from src.application.agent.graph import build_agent
+from src.application.agent.memory import InMemorySessionStore
+from src.application.agent.tools import RAGSearchTool
+from src.application.rag.embedder import Embedder
+from src.application.rag.ingestion.pipeline import IngestPipeline
+from src.application.rag.retriever import Retriever
 from src.domain.config import settings
 from src.infra.llm_client import LiteLLMClient
 from src.infra.postgres_session_store import PostgresSessionStore
 from src.infra.vector_store import ChromaVectorStore
 from src.ports.outbound import ISessionStore
-from src.rag.embedder import Embedder
-from src.rag.ingestion.pipeline import IngestPipeline
-from src.rag.retriever import Retriever
 
 logger = structlog.get_logger()
 

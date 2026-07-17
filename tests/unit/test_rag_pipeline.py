@@ -1,10 +1,10 @@
 import pytest
 
+from src.application.rag.embedder import Embedder
+from src.application.rag.ingestion.pipeline import IngestPipeline
+from src.application.rag.ingestion.splitter import TextSplitter
+from src.application.rag.retriever import Retriever
 from src.domain.models import Chunk, Document
-from src.rag.embedder import Embedder
-from src.rag.ingestion.pipeline import IngestPipeline
-from src.rag.ingestion.splitter import TextSplitter
-from src.rag.retriever import Retriever
 from tests.conftest import MockLLMClient, MockVectorStore
 
 
@@ -84,31 +84,31 @@ async def test_pipeline_stores_chunks(
 
 
 def test_get_loader_txt() -> None:
-    from src.rag.ingestion.loader import TextLoader, get_loader
+    from src.application.rag.ingestion.loader import TextLoader, get_loader
 
     assert isinstance(get_loader("document.txt"), TextLoader)
 
 
 def test_get_loader_md() -> None:
-    from src.rag.ingestion.loader import TextLoader, get_loader
+    from src.application.rag.ingestion.loader import TextLoader, get_loader
 
     assert isinstance(get_loader("notes.md"), TextLoader)
 
 
 def test_get_loader_pdf() -> None:
-    from src.rag.ingestion.loader import PDFLoader, get_loader
+    from src.application.rag.ingestion.loader import PDFLoader, get_loader
 
     assert isinstance(get_loader("report.pdf"), PDFLoader)
 
 
 def test_get_loader_url() -> None:
-    from src.rag.ingestion.loader import URLLoader, get_loader
+    from src.application.rag.ingestion.loader import URLLoader, get_loader
 
     assert isinstance(get_loader("https://example.com/page"), URLLoader)
 
 
 def test_is_private_host() -> None:
-    from src.rag.ingestion.loader import _is_private_host
+    from src.application.rag.ingestion.loader import _is_private_host
 
     assert _is_private_host("127.0.0.1") is True
     assert _is_private_host("10.0.0.5") is True
@@ -121,13 +121,13 @@ def test_is_private_host() -> None:
 
 
 def test_get_loader_url_validates_private_ip() -> None:
+    from src.application.rag.ingestion.loader import URLLoader
     from src.domain.exceptions import UnsupportedSourceError
-    from src.rag.ingestion.loader import URLLoader
 
     loader = URLLoader()
     assert loader is not None
 
-    from src.rag.ingestion.loader import _validate_url
+    from src.application.rag.ingestion.loader import _validate_url
 
     with pytest.raises(UnsupportedSourceError):
         _validate_url("http://127.0.0.1:5000/admin")
@@ -137,8 +137,8 @@ def test_get_loader_url_validates_private_ip() -> None:
 
 
 def test_get_loader_url_validates_hostname() -> None:
+    from src.application.rag.ingestion.loader import _validate_url
     from src.domain.exceptions import UnsupportedSourceError
-    from src.rag.ingestion.loader import _validate_url
 
     with pytest.raises(UnsupportedSourceError):
         _validate_url("http://localhost:8000/internal")
@@ -151,14 +151,14 @@ def test_get_loader_url_validates_allowed_domains(
     from src.domain.exceptions import UnsupportedSourceError
 
     monkeypatch.setattr(settings, "allowed_url_domains", "example.com")
-    from src.rag.ingestion.loader import _validate_url
+    from src.application.rag.ingestion.loader import _validate_url
 
     with pytest.raises(UnsupportedSourceError):
         _validate_url("http://evil.com/data")
 
 
 def test_get_loader_url_allows_public_domain() -> None:
-    from src.rag.ingestion.loader import _validate_url
+    from src.application.rag.ingestion.loader import _validate_url
 
     _validate_url("https://example.com/page")
     _validate_url("https://www.wikipedia.org")
@@ -168,7 +168,7 @@ def test_get_loader_url_allows_public_domain() -> None:
 async def test_url_loader_loads_content() -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
 
-    from src.rag.ingestion.loader import URLLoader
+    from src.application.rag.ingestion.loader import URLLoader
 
     mock_response = MagicMock()
     mock_response.text = "<html><body>Hello world</body></html>"
@@ -191,7 +191,7 @@ async def test_url_loader_http_error() -> None:
 
     import httpx
 
-    from src.rag.ingestion.loader import URLLoader  # noqa: I001
+    from src.application.rag.ingestion.loader import URLLoader  # noqa: I001
 
     async def _raise(*args: object, **kwargs: object) -> None:
         raise httpx.HTTPStatusError("404", request=None, response=None)  # type: ignore[call-arg]
@@ -206,8 +206,8 @@ async def test_url_loader_http_error() -> None:
 
 @pytest.mark.asyncio
 async def test_url_loader_rejects_private_ip() -> None:
+    from src.application.rag.ingestion.loader import URLLoader
     from src.domain.exceptions import UnsupportedSourceError
-    from src.rag.ingestion.loader import URLLoader
 
     loader = URLLoader()
     with pytest.raises(UnsupportedSourceError):
@@ -215,7 +215,7 @@ async def test_url_loader_rejects_private_ip() -> None:
 
 
 def test_is_private_host_ipv6_and_wildcard() -> None:
-    from src.rag.ingestion.loader import _is_private_host
+    from src.application.rag.ingestion.loader import _is_private_host
 
     assert _is_private_host("::1") is True
     assert _is_private_host("fe80::1") is True
@@ -228,8 +228,8 @@ def test_is_private_host_ipv6_and_wildcard() -> None:
 async def test_url_loader_rejects_redirect_to_private_ip() -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
 
+    from src.application.rag.ingestion.loader import URLLoader
     from src.domain.exceptions import UnsupportedSourceError
-    from src.rag.ingestion.loader import URLLoader
 
     redirect_response = MagicMock()
     redirect_response.is_redirect = True
@@ -261,7 +261,7 @@ async def test_pdf_loader_loads_content() -> None:
     import os
     import tempfile
 
-    from src.rag.ingestion.loader import PDFLoader
+    from src.application.rag.ingestion.loader import PDFLoader
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
         f.write(buf.getvalue())
@@ -279,7 +279,7 @@ async def test_pdf_loader_loads_content() -> None:
 async def test_url_loader_strips_tags() -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
 
-    from src.rag.ingestion.loader import URLLoader
+    from src.application.rag.ingestion.loader import URLLoader
 
     mock_response = MagicMock()
     mock_response.text = "<html><body><nav>Navbar</nav><div>Content</div></body></html>"
@@ -298,8 +298,8 @@ async def test_url_loader_strips_tags() -> None:
 
 
 def test_get_loader_unsupported() -> None:
+    from src.application.rag.ingestion.loader import get_loader
     from src.domain.exceptions import UnsupportedSourceError
-    from src.rag.ingestion.loader import get_loader
 
     with pytest.raises(UnsupportedSourceError):
         get_loader("document.docx")

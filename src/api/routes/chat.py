@@ -22,7 +22,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         chat_requests_total.labels(status="blocked").inc()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    from src.agent.graph import AgentGraph
+    from src.application.agent.graph import AgentGraph
 
     agent: AgentGraph = request.app.state.agent
 

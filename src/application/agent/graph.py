@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import time
 
-from src.agent.tools import RAGSearchTool
+from src.application.agent.tools import RAGSearchTool
 from src.domain.models import AgentState, ChatMessage, ChatResponse, Source
 from src.observability.telemetry import (
     active_sessions,
     llm_latency_seconds,
     retrieval_latency_seconds,
 )
+from src.ports.inbound import IChatUseCase
 from src.ports.outbound import ILLMClient, ISessionStore
 
 ROUTE_PROMPT = """You are a routing assistant. Given a user question, decide if it needs
@@ -20,7 +21,7 @@ based on the provided context. Always cite your sources using [Source: filename]
 If the context is empty, answer from your general knowledge and say so."""
 
 
-class AgentGraph:
+class AgentGraph(IChatUseCase):
     def __init__(
         self,
         llm_client: ILLMClient,

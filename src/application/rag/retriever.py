@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from src.application.rag.embedder import Embedder
 from src.domain.config import settings
 from src.domain.models import Chunk
 from src.ports.outbound import IVectorStore
-from src.rag.embedder import Embedder
 
 
 class Retriever:

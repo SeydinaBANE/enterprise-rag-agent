@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from src.application.rag.embedder import Embedder
+from src.application.rag.ingestion.loader import get_loader
+from src.application.rag.ingestion.splitter import TextSplitter
 from src.domain.models import Chunk
+from src.ports.inbound import IIngestUseCase
 from src.ports.outbound import IVectorStore
-from src.rag.embedder import Embedder
-from src.rag.ingestion.loader import get_loader
-from src.rag.ingestion.splitter import TextSplitter
 
 
-class IngestPipeline:
+class IngestPipeline(IIngestUseCase):
     def __init__(
         self,
         vector_store: IVectorStore,

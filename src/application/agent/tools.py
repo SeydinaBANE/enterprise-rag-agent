@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from src.application.rag.embedder import Embedder
 from src.domain.models import Chunk
 from src.ports.outbound import IVectorStore
-from src.rag.embedder import Embedder
 
 
 @dataclass

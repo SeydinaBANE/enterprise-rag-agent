@@ -24,10 +24,10 @@ def client(
     app.state.llm_client = mock_llm
     app.state.vector_store = mock_vector_store
 
-    from src.agent.graph import build_agent
-    from src.agent.tools import RAGSearchTool
-    from src.rag.embedder import Embedder
-    from src.rag.ingestion.pipeline import IngestPipeline
+    from src.application.agent.graph import build_agent
+    from src.application.agent.tools import RAGSearchTool
+    from src.application.rag.embedder import Embedder
+    from src.application.rag.ingestion.pipeline import IngestPipeline
     from tests.conftest import MockSessionStore
 
     embedder = Embedder(mock_llm)
@@ -95,7 +95,7 @@ def test_ingest_file_success(client: TestClient, mock_llm: MockLLMClient) -> Non
     )
     mock_llm.embed.return_value = [[0.1] * 384]
 
-    with patch("src.rag.ingestion.pipeline.get_loader", return_value=mock_loader):
+    with patch("src.application.rag.ingestion.pipeline.get_loader", return_value=mock_loader):
         response = client.post(
             "/documents/ingest",
             files={"file": ("test.txt", BytesIO(b"word " * 50), "text/plain")},
@@ -116,7 +116,7 @@ def test_ingest_url_success(client: TestClient, mock_llm: MockLLMClient) -> None
     )
     mock_llm.embed.return_value = [[0.1] * 384]
 
-    with patch("src.rag.ingestion.pipeline.get_loader", return_value=mock_loader):
+    with patch("src.application.rag.ingestion.pipeline.get_loader", return_value=mock_loader):
         response = client.post(
             "/documents/ingest/url",
             json={"url": "https://example.com"},
@@ -139,7 +139,7 @@ def test_ingest_file_unsupported_source_error(client: TestClient) -> None:
     from src.domain.exceptions import UnsupportedSourceError
 
     with patch(
-        "src.rag.ingestion.pipeline.get_loader",
+        "src.application.rag.ingestion.pipeline.get_loader",
         side_effect=UnsupportedSourceError("unsupported"),
     ):
         response = client.post(
@@ -154,7 +154,7 @@ def test_ingest_file_embedding_error(client: TestClient) -> None:
     from src.domain.exceptions import EmbeddingError
 
     with patch(
-        "src.rag.ingestion.pipeline.get_loader",
+        "src.application.rag.ingestion.pipeline.get_loader",
         side_effect=EmbeddingError("embed failed"),
     ):
         response = client.post(
@@ -169,7 +169,7 @@ def test_ingest_url_vector_store_error(client: TestClient) -> None:
     from src.domain.exceptions import VectorStoreError
 
     with patch(
-        "src.rag.ingestion.pipeline.get_loader",
+        "src.application.rag.ingestion.pipeline.get_loader",
         side_effect=VectorStoreError("db down"),
     ):
         response = client.post(
@@ -184,7 +184,7 @@ def test_ingest_url_embedding_error(client: TestClient) -> None:
     from src.domain.exceptions import EmbeddingError
 
     with patch(
-        "src.rag.ingestion.pipeline.get_loader",
+        "src.application.rag.ingestion.pipeline.get_loader",
         side_effect=EmbeddingError("embed failed"),
     ):
         response = client.post(

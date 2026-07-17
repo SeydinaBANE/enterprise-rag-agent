@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from src.agent.graph import build_agent
-from src.agent.memory import ConversationMemory, InMemorySessionStore
-from src.agent.tools import RAGSearchTool
+from src.application.agent.graph import build_agent
+from src.application.agent.memory import ConversationMemory, InMemorySessionStore
+from src.application.agent.tools import RAGSearchTool
+from src.application.rag.embedder import Embedder
 from src.domain.models import ChatMessage, Chunk
-from src.rag.embedder import Embedder
 from tests.conftest import MockLLMClient, MockSessionStore, MockVectorStore
 
 
