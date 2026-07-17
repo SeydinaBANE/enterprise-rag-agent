@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Architecture Decision Records (ADR 001–003)
 
 ### Changed
+- Refactored to an explicit hexagonal (ports & adapters) architecture: `core/` → `domain/`, `agent/`+`rag/` → `application/`, `infra/` → `adapters/secondary/`, `api/` → `adapters/primary/api/`; ports split into `ports/inbound.py` (`IChatUseCase`, `IIngestUseCase`) and `ports/outbound.py` (`ILLMClient`, `IVectorStore`, `ISessionStore`, `IDocumentLoader`)
 - LLM client: configurable timeout (default 60s) with exponential retry (max 2)
 - LLM healthcheck: replaced paid `acompletion("ping")` with lightweight HEAD request
 - ChromaDB: dimension mismatch guard on ingest, `ingested_at` stored in metadata

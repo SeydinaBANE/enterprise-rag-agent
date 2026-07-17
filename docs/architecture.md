@@ -2,8 +2,11 @@
 
 ## Overview
 
-The system is structured in four layers following Clean Architecture principles.
-Each layer depends only on layers below it; the domain layer (`core/`) has zero external dependencies.
+The system follows a hexagonal (ports & adapters) architecture. Dependencies only
+flow inward, toward `domain/` and `ports/`: the domain layer (`domain/`) has zero
+external dependencies, `ports/` defines the ABC boundaries, `application/` implements
+the inbound ports and depends only on the outbound ports, and `adapters/` implements
+the outbound ports (secondary) or drives the inbound ports (primary).
 
 ## Layer Diagram
 
@@ -13,29 +16,37 @@ Each layer depends only on layers below it; the domain layer (`core/`) has zero 
 └───────────────────────────┬──────────────────────────────────┘
                             │ HTTP (JSON / multipart)
 ┌───────────────────────────▼──────────────────────────────────┐
-│                    API Layer (FastAPI)                        │
+│      Primary Adapter — API Layer (adapters/primary/api/)     │
 │  routes/chat.py  routes/documents.py  routes/health.py       │
 │  middleware/auth.py  middleware/logging.py                    │
+│  depends only on ports/inbound.py (IChatUseCase, IIngestUseCase)│
 └───────────────────────────┬──────────────────────────────────┘
-                            │ calls
+                            │ calls via inbound ports
 ┌───────────────────────────▼──────────────────────────────────┐
-│              Agent Layer                                     │
-│  graph.py (AgentGraph)  tools.py  memory.py                  │
+│         Application Layer — Agent (application/agent/)        │
+│  graph.py (AgentGraph : IChatUseCase)  tools.py  memory.py   │
 └──────────┬───────────────────────────────┬───────────────────┘
            │ retrieval                     │ generation
 ┌──────────▼──────────┐        ┌──────────▼──────────────────┐
-│   RAG Pipeline      │        │   Infra: litellm/OpenRouter  │
-│  ingestion/         │        │   llm_client.py              │
-│  embedder.py        │        └─────────────────────────────-┘
-│  retriever.py       │
+│ Application — RAG    │        │ Secondary Adapter: litellm/  │
+│ (application/rag/)   │        │ OpenRouter (adapters/         │
+│  ingestion/          │        │ secondary/llm_client.py)     │
+│  embedder.py         │        │ implements ILLMClient        │
+│  retriever.py        │        └─────────────────────────────-┘
 └──────────┬──────────┘
-           │ reads/writes
-┌──────────▼──────────┐
-│   Infra: ChromaDB   │
-│   vector_store.py   │
-└─────────────────────┘
+           │ reads/writes via IVectorStore
+┌──────────▼──────────────────────┐
+│ Secondary Adapter: ChromaDB      │
+│ (adapters/secondary/vector_store.py) │
+└──────────────────────────────────┘
 
-Cross-cutting (all layers):
+Ports (the boundary every arrow above crosses):
+  ports/inbound.py  — IChatUseCase, IIngestUseCase (primary adapter depends on these;
+                       application implements them)
+  ports/outbound.py — ILLMClient, IVectorStore, ISessionStore, IDocumentLoader
+                       (application depends on these; adapters/secondary implements them)
+
+Cross-cutting (all layers, outside the hexagon):
   guardrails/filters.py      ← input/output safety on every chat request
   observability/telemetry.py ← OTel spans + Prometheus metrics on every call
 ```
@@ -51,23 +62,24 @@ stateDiagram-v2
     generate_node --> [*]
 ```
 
-Note: guardrails (`check_input` / `check_output`) are applied in the API route (`routes/chat.py`), not inside the agent graph.
+Note: guardrails (`check_input` / `check_output`) are applied in the API route
+(`adapters/primary/api/routes/chat.py`), not inside the agent graph.
 
 ## Data Flow — Chat Request
 
 ```
 POST /chat
   │
-  ├─ middleware/auth.py         → validate X-API-Key
-  ├─ middleware/logging.py      → structured request log
-  ├─ guardrails/filters.py      → check input (PII, injection, length)
+  ├─ adapters/primary/api/middleware/auth.py     → validate X-API-Key
+  ├─ adapters/primary/api/middleware/logging.py  → structured request log
+  ├─ guardrails/filters.py                       → check input (PII, injection, length)
   │
-  └─ agent/graph.py (invoke)
+  └─ application/agent/graph.py (AgentGraph.invoke, via IChatUseCase)
        ├─ route_node             → classify query (RAG needed?)
        ├─ rag_search_node        → embedder.embed(query) → retriever.search()
-       │    └─ infra/vector_store.py (ChromaDB query)
+       │    └─ adapters/secondary/vector_store.py (ChromaDB query, via IVectorStore)
        └─ generate_node          → litellm.acompletion(messages + context)
-            └─ infra/llm_client.py (OpenRouter)
+            └─ adapters/secondary/llm_client.py (OpenRouter, via ILLMClient)
   │
   ├─ guardrails/filters.py       → check_output (PII redaction on LLM answer)
   └─ ChatResponse (answer, sources, latency_ms)
@@ -78,12 +90,12 @@ POST /chat
 ```
 POST /documents/ingest
   │
-  ├─ middleware/auth.py
-  └─ rag/ingestion/pipeline.py
-       ├─ loader.py              → load(file/url) → list[Document]
-       ├─ splitter.py            → split(docs) → list[Chunk]
-       ├─ embedder.py            → embed(chunks) → list[vector]
-       └─ infra/vector_store.py  → store(chunks, vectors) → ChromaDB
+  ├─ adapters/primary/api/middleware/auth.py
+  └─ application/rag/ingestion/pipeline.py (IngestPipeline.run, via IIngestUseCase)
+       ├─ adapters/secondary/loaders.py     → load(file/url) → list[Document] (via IDocumentLoader)
+       ├─ ingestion/splitter.py             → split(docs) → list[Chunk]
+       ├─ embedder.py                       → embed(chunks) → list[vector]
+       └─ adapters/secondary/vector_store.py → store(chunks, vectors) → ChromaDB (via IVectorStore)
 ```
 
 ## Security Layers

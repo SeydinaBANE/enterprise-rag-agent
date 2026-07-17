@@ -6,16 +6,16 @@ Règles non négociables pour contribuer à ce projet.
 
 ## Architecture
 
-- Les dépendances ne vont que vers l'intérieur : `API → Agent → core/ ← infra/`
-- `src/core/` ne doit jamais importer de bibliothèque externe (zéro dépendance)
-- Le code ne dépend que des interfaces (`ILLMClient`, `IVectorStore`, `IDocumentLoader`, `ISessionStore`) — jamais des implémentations concrètes
+- Architecture hexagonale (ports & adapters) : `adapters/primary/api → ports/inbound → application/ → ports/outbound ← adapters/secondary`, tout convergeant vers `domain/`
+- `src/domain/` ne doit jamais importer de bibliothèque externe (zéro dépendance)
+- Le code ne dépend que des interfaces définies dans `src/ports/outbound.py` (`ILLMClient`, `IVectorStore`, `IDocumentLoader`, `ISessionStore`) et `src/ports/inbound.py` (`IChatUseCase`, `IIngestUseCase`) — jamais des implémentations concrètes
 - La configuration vient toujours de `settings` (pydantic-settings) — jamais de `os.environ` directement
-- Les appels base de données et LLM restent dans `infra/` — jamais dans les routes API
+- Les appels base de données et LLM restent dans `adapters/secondary/` — jamais dans les routes API
 
 ## Exceptions
 
-- Les exceptions métier (`GuardrailViolation`, `LLMError`, etc.) sont levées dans `domain/infra` et rattrapées dans les routes API
-- Chaque nouvelle exception domaine s'ajoute dans `src/core/exceptions.py`
+- Les exceptions métier (`GuardrailViolation`, `LLMError`, etc.) sont levées dans `domain/`/`adapters/` et rattrapées dans les routes API
+- Chaque nouvelle exception domaine s'ajoute dans `src/domain/exceptions.py`
 - Ne jamais laisser une `Exception` générique traverser une route — toujours convertir en `HTTPException`
 - Mapping HTTP obligatoire : `EmbeddingError` → 502, `VectorStoreError` → 500, `LLMError` → 500, `GuardrailViolation` → 422, `UnsupportedSourceError` → 422
 - Le handler global (`@app.exception_handler(Exception)` dans `main.py`) attrape tout le reste et retourne un JSON structuré avec `request_id` — ne pas dupliquer cette logique dans les routes
@@ -37,7 +37,7 @@ Règles non négociables pour contribuer à ce projet.
 
 ## Observabilité
 
-- Toute nouvelle métrique Prometheus se déclare dans `src/observability/telemetry.py` comme singleton module-level
+- Toute nouvelle métrique Prometheus se déclare dans `src/observability/telemetry.py` comme singleton module-level (cross-cutting, hors de l'hexagone)
 - Ne jamais instancier `Counter`, `Histogram` ou `Gauge` hors de `telemetry.py`
 - Les histogrammes se mesurent avec `time.monotonic()` autour de l'appel à chronomètrer
 - Les logs utilisent `structlog` — jamais `print()` ou `logging` directement
